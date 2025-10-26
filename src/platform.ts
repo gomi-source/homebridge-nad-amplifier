@@ -85,8 +85,8 @@ export class NadAmplifierPlatform implements DynamicPlatformPlugin {
   async discoverDevices() {
     // Query REST API for devices
     const devices = await this.GetAmplifiers();
-    console.debug('************ DISCOVERED DEVICES ************');
-    console.debug(devices);
+    this.log.debug('************ DISCOVERED DEVICES ************');
+    this.log.debug(String(devices));
 
     // loop over the discovered devices and register each one if it has not already been registered
     for (const device of devices) {
@@ -99,7 +99,6 @@ export class NadAmplifierPlatform implements DynamicPlatformPlugin {
       // the cached devices we stored in the `configureAccessory` method above
       const existingAccessory = this.accessories.get(uuid);
 
-      console.debug(device);
       if (existingAccessory) {
         // the accessory already exists
         this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
@@ -158,21 +157,24 @@ export class NadAmplifierPlatform implements DynamicPlatformPlugin {
       'Authorization': 'Basic ' + basic_auth_string,
     };
 
+    this.log.debug(`Calling ${this.config.http.basePath}/amplifiers`);
+
     const getJSON = bent('json');
     const response = await getJSON(this.config.http.basePath + '/amplifiers', '', headers);
 
     // Response is an array of amplifiers
-    console.debug('************ AMPLIFIER RESPONSE ************');
-    console.debug(response);
+    this.log.debug('************ LIST AMPLIFIERS RESPONSE ************');
+    this.log.debug(response);
 
     for (const amp_response of response) {
-      console.debug(amp_response.id);  // "m33"
+      this.log.debug(`Amp id from HTTP list amplifiers call: ${amp_response.id}`);  // e.g. "m33"
       
       const amplifier = new Amplifier(amp_response.id);
 
       // Query for info on each amp
       const ampData = await getJSON(this.config.http.basePath + '/amplifiers/' + amp_response.id, '', headers);
-      console.debug(ampData);
+      this.log.debug('************ AMPLIFIER DATA RESPONSE ************');
+      this.log.debug(ampData);
       amplifier.amplifier = ampData;
       amplifier.mac_address = ampData.mac_address;
 

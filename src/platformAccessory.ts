@@ -40,7 +40,15 @@ export class NadAmplifierAccessory {
       source: `${this.platform.config.mqtt.topicBase}/source`,
     };
 
-    this.mqtt = connect(`mqtt://${this.platform.config.mqtt.host}:${this.platform.config.mqtt.port}`);
+    const mqtt_connection_options = {
+      username: this.platform.config.mqtt.username,
+      password: this.platform.config.mqtt.password, // Buffer.from(this.platform.config.mqtt.password), // Passwords are buffers
+    };
+    if (this.platform.config.mqtt.username) {
+      this.mqtt = connect(`mqtt://${this.platform.config.mqtt.host}:${this.platform.config.mqtt.port}`, mqtt_connection_options);
+    } else {
+      this.mqtt = connect(`mqtt://${this.platform.config.mqtt.host}:${this.platform.config.mqtt.port}`);
+    }
     this.mqtt.on('connect', () => {
       this.platform.log.info('Connected to MQTT broker');
     });
@@ -51,7 +59,7 @@ export class NadAmplifierAccessory {
       if (error) {
         this.platform.log.error('Error subscribing to topic:', error);
       } else {
-        this.platform.log.info('Subscribed to topic:', topic);
+        this.platform.log.info('Subscribed to topic ', topic);
       }
     }));
     this.mqtt.on('message', (topic, message) => {
@@ -211,12 +219,12 @@ export class NadAmplifierAccessory {
   }
 
   async getPower(): Promise<CharacteristicValue> {
-    this.platform.log.debug('Triggered GET Power');
+    this.platform.log.debug('Triggered GET Power:', this.amplifierStates.Power);
     return this.amplifierStates.Power;
   }
 
   async setPower(value: CharacteristicValue) {
-    this.platform.log.debug('Triggered Set Power: ', value);
+    this.platform.log.debug('Triggered Set Power: ', value.toString());
 
     // Call HTTP server to turn on/off amplifier
     const url = this.platform.config.http.basePath + '/amplifiers/' + this.accessory.context.device.id + '/power';    
@@ -225,13 +233,15 @@ export class NadAmplifierAccessory {
       'Authorization': 'Basic ' + basic_auth_string,
     };
 
+    // If value is true then body sent should be the string "true"
     const postJSON = bent('POST', 204);
-    await postJSON(url, this.amplifierStates.Power.toString(), headers);
+    await postJSON(url, value as boolean ? 'true' : 'false', headers);
     
     // if you need to return an error to show the device as "Not Responding" in the Home app:
     // throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
 
-    this.speaker.updateCharacteristic(this.platform.Characteristic.Active, value ? 1 : 0);
+    this.speaker.updateCharacteristic(this.platform.Characteristic.Active, value);
+    this.amplifierStates.Power = value as boolean;
     this.platform.log.debug(this.amplifierStates.Power.toString());
   }
 
@@ -251,12 +261,13 @@ export class NadAmplifierAccessory {
     };
 
     const postJSON = bent('POST', 204);
-    await postJSON(url, this.amplifierStates.Mute.toString(), headers);
+    await postJSON(url, value as boolean ? 'true' : 'false', headers);
 
     // if you need to return an error to show the device as "Not Responding" in the Home app:
     // throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
 
     this.speaker.updateCharacteristic(this.platform.Characteristic.Mute, value);
+    this.amplifierStates.Mute = value as boolean;
     this.platform.log.debug(this.amplifierStates.Mute.toString());
   }
 
@@ -274,8 +285,6 @@ export class NadAmplifierAccessory {
       return;
     }
 
-    this.amplifierStates.Volume = value as number;
-
     // Call HTTP server to set volume
     const url = this.platform.config.http.basePath + '/amplifiers/' + this.accessory.context.device.id + '/volume_percent';    
     const basic_auth_string = Buffer.from(this.platform.config.http.username + ':' + this.platform.config.http.password).toString('base64');
@@ -290,6 +299,7 @@ export class NadAmplifierAccessory {
     // throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
 
     this.speaker.updateCharacteristic(this.platform.Characteristic.Volume, value);
+    this.amplifierStates.Volume = value as number;
     this.platform.log.debug(this.amplifierStates.Volume.toString());
   }
 }
