@@ -153,7 +153,7 @@ export class NadAmplifierPlatform implements DynamicPlatformPlugin {
   async GetAmplifiers(): Promise<Amplifier[]> {
     const amplifiers: Amplifier[] = [];
 
-    const basic_auth_string = Buffer.from(this.config.username + ':' + this.config.password).toString('base64');
+    const basic_auth_string = Buffer.from(this.config.http.username + ':' + this.config.http.password).toString('base64');
     const headers = {
       'Authorization': 'Basic ' + basic_auth_string,
     };
