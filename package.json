@@ -1,0 +1,49 @@
+{
+  "name": "homebridge-nad-amplifier",
+  "displayName": "NAD Amplifier",
+  "type": "module",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Controls an NAD M33 Amplifier over an MQTT to serial bridge and HTTP middleware.",
+  "author": "gomi-source",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/gomi-source/homebridge-nad-amplifier",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gomi-source/homebridge-nad-amplifier.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gomi-source/homebridge-nad-amplifier/issues"
+  },
+  "keywords": [
+    "homebridge-plugin"
+  ],
+  "main": "dist/index.js",
+  "engines": {
+    "node": "^18.20.4 || ^20.18.0 || ^22.10.0",
+    "homebridge": "^1.8.0 || ^2.0.0-beta.0"
+  },
+  "scripts": {
+    "build": "rimraf ./dist && tsc",
+    "lint": "eslint . --max-warnings=0",
+    "prepublishOnly": "npm run lint && npm run build",
+    "watch": "npm run build && npm link && nodemon"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.21.0",
+    "@types/bent": "^7.3.8",
+    "@types/node": "^22.13.5",
+    "eslint": "^9.21.0",
+    "homebridge": "^2.0.0-beta.0",
+    "nodemon": "^3.1.9",
+    "rimraf": "^6.0.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.24.1"
+  },
+  "dependencies": {
+    "bent": "^7.3.12",
+    "homebridge-lib": "^7.1.4",
+    "mqtt": "^5.11.0"
+  }
+}
