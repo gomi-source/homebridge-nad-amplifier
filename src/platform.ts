@@ -178,6 +178,12 @@ export class NadAmplifierPlatform implements DynamicPlatformPlugin {
       amplifier.amplifier = ampData;
       amplifier.mac_address = ampData.mac_address;
 
+      // Query for inputs on amp
+      const sourcesData = await getJSON(this.config.http.basePath + '/amplifiers/' + amp_response.id + '/sources', '', headers);
+      this.log.debug('************ AMPLIFIER SOURCES RESPONSE ************');
+      this.log.debug(sourcesData);
+      amplifier.sources = sourcesData;
+
       amplifiers.push(amplifier);
     }
 
@@ -188,6 +194,8 @@ export class NadAmplifierPlatform implements DynamicPlatformPlugin {
 export class Amplifier {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public amplifier: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  public sources: any;
   public mac_address?: string;
 
   constructor(

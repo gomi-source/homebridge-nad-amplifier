@@ -2,7 +2,7 @@
   "name": "homebridge-nad-amplifier",
   "displayName": "NAD Amplifier",
   "type": "module",
-  "version": "0.3.11",
+  "version": "0.3.12",
   "private": false,
   "description": "Controls an NAD M33 Amplifier over an MQTT to serial bridge and HTTP middleware.",
   "author": "gomi-source",
