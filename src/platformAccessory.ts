@@ -100,7 +100,7 @@ export class NadAmplifierAccessory {
     this.amplifierStates.Power = accessory.context.device.amplifier.power;
     this.amplifierStates.Mute = accessory.context.device.amplifier.mute;
     this.amplifierStates.Volume = accessory.context.device.amplifier.volume_percent;
-    this.platform.log.debug(`Available context: ${accessory.context.device}`);
+    this.platform.log.debug(`Available context G: ${JSON.stringify(accessory.context.device, null, 2)}`);
 
     // set accessory information
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
@@ -186,30 +186,20 @@ export class NadAmplifierAccessory {
     */
     // INPUT SOURCE SERVICE
     // ***********************************************
-    /* Create TV Input Source Services
-     * These are the inputs the user can select from.
-     * When a user selected an input the corresponding Identifier Characteristic
-     * is sent to the TV Service ActiveIdentifier Characteristic handler.
-     */
-    const inputSourceService1 = this.accessory.getService('hdmi-arc')
-      || this.accessory.addService(this.platform.Service.InputSource, 'HDMI ARC', 'hdmi-arc');
-    inputSourceService1
-      .setCharacteristic(this.platform.Characteristic.Identifier, 99)
-      .setCharacteristic(this.platform.Characteristic.ConfiguredName, 'HDMI ARC')
-      .setCharacteristic(this.platform.Characteristic.IsConfigured, this.platform.Characteristic.IsConfigured.CONFIGURED)
-      .setCharacteristic(this.platform.Characteristic.InputSourceType, this.platform.Characteristic.InputSourceType.HDMI)
-      .setCharacteristic(this.platform.Characteristic.CurrentVisibilityState, this.platform.Characteristic.CurrentVisibilityState.SHOWN);
-    this.televisionService.addLinkedService(inputSourceService1); // link to tv service
-
-    const inputSourceService2 = this.accessory.getService('optical1')
-      || this.accessory.addService(this.platform.Service.InputSource, 'Optical 1', 'optical1');
-    inputSourceService2
-      .setCharacteristic(this.platform.Characteristic.Identifier, 2)
-      .setCharacteristic(this.platform.Characteristic.ConfiguredName, 'Optical 1')
-      .setCharacteristic(this.platform.Characteristic.IsConfigured, this.platform.Characteristic.IsConfigured.CONFIGURED)
-      .setCharacteristic(this.platform.Characteristic.InputSourceType, this.platform.Characteristic.InputSourceType.OTHER)
-      .setCharacteristic(this.platform.Characteristic.CurrentVisibilityState, this.platform.Characteristic.CurrentVisibilityState.SHOWN);
-    this.televisionService.addLinkedService(inputSourceService2); // link to tv service
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    accessory.context.device.sources.forEach((input: any) => {
+      const subTypeName = JSON.stringify(input.name).replace( /\W/g , '').toLowerCase();
+      const inputSourceService1 = this.accessory.getService(subTypeName)
+        || this.accessory.addService(this.platform.Service.InputSource, input.name, subTypeName);
+      inputSourceService1
+        .setCharacteristic(this.platform.Characteristic.Identifier, input.position)
+        .setCharacteristic(this.platform.Characteristic.ConfiguredName, input.name)
+        .setCharacteristic(this.platform.Characteristic.IsConfigured, this.platform.Characteristic.IsConfigured.CONFIGURED)
+        .setCharacteristic(this.platform.Characteristic.InputSourceType, this.platform.Characteristic.InputSourceType.OTHER)
+        .setCharacteristic(this.platform.Characteristic.CurrentVisibilityState, input.is_enabled 
+          ? this.platform.Characteristic.CurrentVisibilityState.SHOWN : this.platform.Characteristic.CurrentVisibilityState.HIDDEN);
+      this.televisionService.addLinkedService(inputSourceService1); // link to tv service
+    });
 
     // this.televisionService.setPrimaryService();
 
@@ -224,7 +214,7 @@ export class NadAmplifierAccessory {
     tvService.addLinkedService(lightbulbService);
     */
     
-    /* Fan service to control volume
+    /* Create a Fan service to control volume
     this.fanService = this.accessory.getService(this.platform.Service.Fan) || this.accessory.addService(this.platform.Service.Fan);
     this.fanService.setCharacteristic(this.platform.Characteristic.On, true);
     this.fanService.setCharacteristic(this.platform.Characteristic.Name, 'Volume');

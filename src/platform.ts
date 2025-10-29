@@ -86,7 +86,7 @@ export class NadAmplifierPlatform implements DynamicPlatformPlugin {
     // Query REST API for devices
     const devices = await this.GetAmplifiers();
     this.log.debug('************ DISCOVERED DEVICES ************');
-    this.log.debug(String(devices));
+    this.log.debug(JSON.stringify(devices, null, 2));
 
     // loop over the discovered devices and register each one if it has not already been registered
     for (const device of devices) {
