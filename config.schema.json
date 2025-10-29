@@ -82,7 +82,7 @@
           "topicBase": {
             "title": "Topic Prefix",
             "type": "string",
-            "default": "tele/control/m33"
+            "default": "tele/control/nad"
           }
         }
       }

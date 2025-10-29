@@ -1,7 +1,7 @@
 import bent from 'bent';
 import { connect, MqttClient } from 'mqtt';
 
-import type { CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
+import { type CharacteristicValue, type PlatformAccessory, type Service } from 'homebridge';
 
 import type { NadAmplifierPlatform } from './platform.js';
 
@@ -12,7 +12,12 @@ import type { NadAmplifierPlatform } from './platform.js';
  * Each accessory may expose multiple services of different service types.
  */
 export class NadAmplifierAccessory {
-  private speaker: Service;
+  // private service: Service;
+  // private lightbulbService: Service;
+  private televisionService: Service;
+  // private televisionSpeakerService: Service;
+  // private fanService: Service;
+  
   private mqtt: MqttClient;
 
   private amplifierStates = {
@@ -34,10 +39,10 @@ export class NadAmplifierAccessory {
     private readonly accessory: PlatformAccessory,
   ) {
     this.topics = {
-      volume: `${this.platform.config.mqtt.topicBase}/volume_percent`,
-      power: `${this.platform.config.mqtt.topicBase}/power`,
-      mute: `${this.platform.config.mqtt.topicBase}/mute`,
-      source: `${this.platform.config.mqtt.topicBase}/source`,
+      volume: `${this.platform.config.mqtt.topicBase}/${accessory.context.device.id}/volume_percent`,
+      power: `${this.platform.config.mqtt.topicBase}/${accessory.context.device.id}/power`,
+      mute: `${this.platform.config.mqtt.topicBase}/${accessory.context.device.id}/mute`,
+      source: `${this.platform.config.mqtt.topicBase}/${accessory.context.device.id}/source`,
     };
 
     const mqtt_connection_options = {
@@ -68,126 +73,92 @@ export class NadAmplifierAccessory {
       switch (topic) {
       case this.topics.volume:
         this.amplifierStates.Volume = parseInt(payload, 10);
-        this.speaker.updateCharacteristic(this.platform.Characteristic.Volume, this.amplifierStates.Volume);
+        // this.speaker.updateCharacteristic(this.platform.Characteristic.Volume, parseInt(payload));
+        // this.lightbulbService.updateCharacteristic(this.platform.Characteristic.Brightness, parseInt(payload));
+        // this.televisionSpeakerService.updateCharacteristic(this.platform.Characteristic.Volume, parseInt(payload));
+        // this.fanService.updateCharacteristic(this.platform.Characteristic.RotationSpeed, parseInt(payload));
+        this.platform.log.debug(`Updating characteristic Volume: ${parseInt(payload)}`);
         break;
       case this.topics.power:
         this.amplifierStates.Power = payload === 'On';
-        this.speaker.updateCharacteristic(this.platform.Characteristic.Active, this.amplifierStates.Power ? 1 : 0);
+        // this.speaker.updateCharacteristic(this.platform.Characteristic.Active, payload === 'On');
+        this.televisionService.updateCharacteristic(this.platform.Characteristic.Active, payload === 'On');
+        // this.fanService.updateCharacteristic(this.platform.Characteristic.On, payload === 'On');
         break;
       case this.topics.mute:
         this.amplifierStates.Mute = payload === 'On';
-        this.speaker.updateCharacteristic(this.platform.Characteristic.Mute, this.amplifierStates.Mute);
+        // this.speaker.updateCharacteristic(this.platform.Characteristic.Mute, payload === 'On');
+        // this.televisionSpeakerService.updateCharacteristic(this.platform.Characteristic.Mute, payload === 'On');
         break;
       case this.topics.source:
         this.amplifierStates.Source = parseInt(payload, 10);
+        this.televisionService.updateCharacteristic(this.platform.Characteristic.ActiveIdentifier, parseInt(payload, 10));
         break;
       }
     });
 
+    this.amplifierStates.Power = accessory.context.device.amplifier.power;
+    this.amplifierStates.Mute = accessory.context.device.amplifier.mute;
+    this.amplifierStates.Volume = accessory.context.device.amplifier.volume_percent;
+    this.platform.log.debug(`Available context: ${accessory.context.device}`);
 
     // set accessory information
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.Manufacturer, 'NAD')
-      .setCharacteristic(this.platform.Characteristic.Model, 'Default-Model')
-      .setCharacteristic(this.platform.Characteristic.SerialNumber, 'Default-Serial');
+      .setCharacteristic(this.platform.Characteristic.Model, accessory.context.device.id)
+      .setCharacteristic(this.platform.Characteristic.SerialNumber, 'unknown');
 
-    this.accessory.category = this.platform.api.hap.Categories.TELEVISION;
+    // set the accessory category
+    // this.accessory.category = this.platform.api.hap.Categories.TELEVISION;
+    
+    // TV SERVICE
+    // ***********************************************
+    this.televisionService = this.accessory.getService(this.platform.Service.Television)
+      || this.accessory.addService(this.platform.Service.Television, 'NAD AS TV');
 
-    const tvService = this.accessory.getService(this.platform.Service.Television) ??
-      this.accessory.addService(this.platform.Service.Television, 'NAD T765 TV');
+    // Required Characteristics
+    this.televisionService.getCharacteristic(this.platform.Characteristic.Active)
+      .onSet(this.setPower.bind(this))
+      .onGet(this.getPower.bind(this));
+    this.televisionService.setCharacteristic(this.platform.Characteristic.Active, this.amplifierStates.Power ? 1 : 0);
 
-    // set the tv name
-    tvService.setCharacteristic(this.platform.Characteristic.ConfiguredName, 'NAD Amplifier TV');
+    this.televisionService.getCharacteristic(this.platform.Characteristic.ActiveIdentifier)
+      .onSet(this.setSource.bind(this))
+      .onGet(this.getSource.bind(this));
+    this.televisionService.setCharacteristic(this.platform.Characteristic.ActiveIdentifier, this.amplifierStates.Source);
+    
+    this.televisionService.setCharacteristic(this.platform.Characteristic.ConfiguredName, 'NAD Amplifier TV');
 
-    // set sleep discovery characteristic
-    tvService.setCharacteristic(this.platform.Characteristic.SleepDiscoveryMode, this.platform.Characteristic.SleepDiscoveryMode.ALWAYS_DISCOVERABLE);
-
-    // handle on / off events using the Active characteristic
-    tvService.getCharacteristic(this.platform.Characteristic.Active)
-      .onSet(this.setPower.bind(this)) // SET - bind to the correct context
-      .onGet(this.getPower.bind(this)); // GET - bind to the correct context
-    // set the initial value of the Active characteristic
-    tvService.setCharacteristic(this.platform.Characteristic.ActiveIdentifier, this.amplifierStates.Power ? 1 : 0);
-
-    // handle input source changes
-    tvService.getCharacteristic(this.platform.Characteristic.ActiveIdentifier)
-      .onSet(this.setPower.bind(this)) // SET - bind to the correct context
-      .onGet(this.getPower.bind(this)); // GET - bind to the correct context
-
-    // handle remote control input
-    tvService.getCharacteristic(this.platform.Characteristic.RemoteKey)
+    this.televisionService.getCharacteristic(this.platform.Characteristic.RemoteKey)
       .onSet((newValue) => {
         switch(newValue) {
-        case this.platform.Characteristic.RemoteKey.REWIND: {
-          this.platform.log.info('set Remote Key Pressed: REWIND');
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.FAST_FORWARD: {
-          this.platform.log.info('set Remote Key Pressed: FAST_FORWARD');
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.NEXT_TRACK: {
-          this.platform.log.info('set Remote Key Pressed: NEXT_TRACK');
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.PREVIOUS_TRACK: {
-          this.platform.log.info('set Remote Key Pressed: PREVIOUS_TRACK');
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.ARROW_UP: {
-          this.platform.log.info('set Remote Key Pressed: ARROW_UP');
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.ARROW_DOWN: {
-          this.platform.log.info('set Remote Key Pressed: ARROW_DOWN');
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.ARROW_LEFT: {
-          this.platform.log.info('set Remote Key Pressed: ARROW_LEFT');
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.ARROW_RIGHT: {
-          this.platform.log.info('set Remote Key Pressed: ARROW_RIGHT');
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.SELECT: {
-          this.platform.log.info('set Remote Key Pressed: SELECT');
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.BACK: {
-          this.platform.log.info('set Remote Key Pressed: BACK');
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.EXIT: {
-          this.platform.log.info('set Remote Key Pressed: EXIT');
-          break;
-        }
         case this.platform.Characteristic.RemoteKey.PLAY_PAUSE: {
           this.platform.log.info('set Remote Key Pressed: PLAY_PAUSE');
-          break;
-        }
-        case this.platform.Characteristic.RemoteKey.INFORMATION: {
-          this.platform.log.info('set Remote Key Pressed: INFORMATION');
           break;
         }
         }
       });
 
-    this.speaker = this.accessory.getService(this.platform.Service.TelevisionSpeaker) ?? 
-      this.accessory.addService(this.platform.Service.TelevisionSpeaker, 'Speaker');
+    this.televisionService.setCharacteristic(this.platform.Characteristic.SleepDiscoveryMode,
+      this.platform.Characteristic.SleepDiscoveryMode.ALWAYS_DISCOVERABLE);
+    
+    /* TV SPEAKER SERVICE
+    // ***********************************************
+    this.televisionSpeakerService = this.accessory.getService(this.platform.Service.TelevisionSpeaker)
+      || this.accessory.addService(this.platform.Service.TelevisionSpeaker);
 
-    this.speaker.setCharacteristic(this.platform.Characteristic.Name, 'Speaker')
-      .setCharacteristic(this.platform.Characteristic.VolumeControlType, this.platform.Characteristic.VolumeControlType.ABSOLUTE);
+    // Required Characteristics
+    this.televisionSpeakerService.getCharacteristic(this.platform.Characteristic.Mute)
+      .onGet(this.getMute.bind(this))
+      .onSet(this.setMute.bind(this));
 
-    this.speaker.getCharacteristic(this.platform.Characteristic.Mute)
-      .onGet(this.getMute.bind(this)) // GET - bind to the correct context
-      .onSet(this.setMute.bind(this)); // SET - bind to the correct context
+    // Optional Characteristics
+    this.televisionSpeakerService.getCharacteristic(this.platform.Characteristic.Volume)
+      .onGet(this.getVolume.bind(this))
+      .onSet(this.setVolume.bind(this));
 
-    this.speaker.getCharacteristic(this.platform.Characteristic.Volume)
-      .onGet(this.getVolume.bind(this)) // GET - bind to the correct context
-      .onSet(this.setVolume.bind(this)); // SET - bind to the correct context
-
-    this.speaker.getCharacteristic(this.platform.Characteristic.VolumeSelector)
+    /*
+    this.televisionSpeakerService.getCharacteristic(this.platform.Characteristic.VolumeSelector)
       .onSet((newValue) => {
         switch(newValue) {
         case this.platform.Characteristic.VolumeSelector.INCREMENT: {
@@ -202,10 +173,47 @@ export class NadAmplifierAccessory {
         }
         }
       });
+    */
+    /*
+    this.televisionSpeakerService.getCharacteristic(this.platform.Characteristic.VolumeSelector)
+      .onSet((newValue) => {
+        this.platform.log.info('set VolumeSelector => setNewValue: ' + newValue);
+      });
 
-    tvService.addLinkedService(this.speaker);
+    this.televisionSpeakerService.setCharacteristic(this.platform.Characteristic.VolumeControlType, this.platform.Characteristic.VolumeControlType.ABSOLUTE);
 
-    // Create a Lightbulb service to control the volume as a dimmer
+    this.televisionService.addLinkedService(this.televisionSpeakerService);
+    */
+    // INPUT SOURCE SERVICE
+    // ***********************************************
+    /* Create TV Input Source Services
+     * These are the inputs the user can select from.
+     * When a user selected an input the corresponding Identifier Characteristic
+     * is sent to the TV Service ActiveIdentifier Characteristic handler.
+     */
+    const inputSourceService1 = this.accessory.getService('hdmi-arc')
+      || this.accessory.addService(this.platform.Service.InputSource, 'HDMI ARC', 'hdmi-arc');
+    inputSourceService1
+      .setCharacteristic(this.platform.Characteristic.Identifier, 99)
+      .setCharacteristic(this.platform.Characteristic.ConfiguredName, 'HDMI ARC')
+      .setCharacteristic(this.platform.Characteristic.IsConfigured, this.platform.Characteristic.IsConfigured.CONFIGURED)
+      .setCharacteristic(this.platform.Characteristic.InputSourceType, this.platform.Characteristic.InputSourceType.HDMI)
+      .setCharacteristic(this.platform.Characteristic.CurrentVisibilityState, this.platform.Characteristic.CurrentVisibilityState.SHOWN);
+    this.televisionService.addLinkedService(inputSourceService1); // link to tv service
+
+    const inputSourceService2 = this.accessory.getService('optical1')
+      || this.accessory.addService(this.platform.Service.InputSource, 'Optical 1', 'optical1');
+    inputSourceService2
+      .setCharacteristic(this.platform.Characteristic.Identifier, 2)
+      .setCharacteristic(this.platform.Characteristic.ConfiguredName, 'Optical 1')
+      .setCharacteristic(this.platform.Characteristic.IsConfigured, this.platform.Characteristic.IsConfigured.CONFIGURED)
+      .setCharacteristic(this.platform.Characteristic.InputSourceType, this.platform.Characteristic.InputSourceType.OTHER)
+      .setCharacteristic(this.platform.Characteristic.CurrentVisibilityState, this.platform.Characteristic.CurrentVisibilityState.SHOWN);
+    this.televisionService.addLinkedService(inputSourceService2); // link to tv service
+
+    // this.televisionService.setPrimaryService();
+
+    /* Create a Lightbulb service to control the volume as a dimmer
     const lightbulbService = this.accessory.getService(this.platform.Service.Lightbulb) || 
     this.accessory.addService(this.platform.Service.Lightbulb, 'Volume');
 
@@ -214,8 +222,17 @@ export class NadAmplifierAccessory {
       .onSet(this.setVolume.bind(this)); // SET - bind to the correct context
 
     tvService.addLinkedService(lightbulbService);
+    */
+    
+    /* Fan service to control volume
+    this.fanService = this.accessory.getService(this.platform.Service.Fan) || this.accessory.addService(this.platform.Service.Fan);
+    this.fanService.setCharacteristic(this.platform.Characteristic.On, true);
+    this.fanService.setCharacteristic(this.platform.Characteristic.Name, 'Volume');
 
-    // TODO: register inputs
+    this.fanService.getCharacteristic(this.platform.Characteristic.RotationSpeed)
+      .onGet(this.getVolume.bind(this))
+      .onSet(this.setVolume.bind(this));
+    */
   }
 
   async getPower(): Promise<CharacteristicValue> {
@@ -240,13 +257,12 @@ export class NadAmplifierAccessory {
     // if you need to return an error to show the device as "Not Responding" in the Home app:
     // throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
 
-    this.speaker.updateCharacteristic(this.platform.Characteristic.Active, value);
+    this.televisionService.updateCharacteristic(this.platform.Characteristic.Active, value);
     this.amplifierStates.Power = value as boolean;
-    this.platform.log.debug(this.amplifierStates.Power.toString());
   }
 
   async getMute(): Promise<CharacteristicValue> {
-    this.platform.log.debug('Triggered GET Mute');
+    this.platform.log.debug('Triggered GET Mute: ', this.amplifierStates.Mute);
     return this.amplifierStates.Mute;
   }
 
@@ -266,15 +282,14 @@ export class NadAmplifierAccessory {
     // if you need to return an error to show the device as "Not Responding" in the Home app:
     // throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
 
-    this.speaker.updateCharacteristic(this.platform.Characteristic.Mute, value);
+    // this.speaker.updateCharacteristic(this.platform.Characteristic.Mute, value);
+    // this.televisionSpeakerService.updateCharacteristic(this.platform.Characteristic.Mute, value);
     this.amplifierStates.Mute = value as boolean;
-    this.platform.log.debug(this.amplifierStates.Mute.toString());
   }
 
   async getVolume(): Promise<CharacteristicValue> {
-    const volume = this.amplifierStates.Volume;
-    this.platform.log.debug('Triggered GET Volume: ', volume);
-    return volume;
+    this.platform.log.debug('Triggered GET Volume: ', this.amplifierStates.Volume);
+    return this.amplifierStates.Volume;
   }
 
   async setVolume(value: CharacteristicValue) {
@@ -293,13 +308,42 @@ export class NadAmplifierAccessory {
     };
 
     const postJSON = bent('POST', 204);
-    await postJSON(url, String(this.amplifierStates.Volume), headers);
+    await postJSON(url, value.toString(), headers);
 
     // if you need to return an error to show the device as "Not Responding" in the Home app:
     // throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
 
-    this.speaker.updateCharacteristic(this.platform.Characteristic.Volume, value);
+    // this.speaker.updateCharacteristic(this.platform.Characteristic.Volume, value);
+    // this.lightbulbService.updateCharacteristic(this.platform.Characteristic.Brightness, value);
+    // this.fanService.updateCharacteristic(this.platform.Characteristic.RotationSpeed, value);
+
     this.amplifierStates.Volume = value as number;
-    this.platform.log.debug(this.amplifierStates.Volume.toString());
   }
+
+  async getSource(): Promise<CharacteristicValue> {
+    this.platform.log.debug('Triggered GET Source: ', this.amplifierStates.Source);
+    return this.amplifierStates.Source;
+  }
+
+  async setSource(value: CharacteristicValue) {
+    this.platform.log.debug('Triggered Set source: ', value.toString());
+
+    // Call HTTP server to turn on/off amplifier
+    const url = this.platform.config.http.basePath + '/amplifiers/' + this.accessory.context.device.id + '/source';    
+    const basic_auth_string = Buffer.from(this.platform.config.http.username + ':' + this.platform.config.http.password).toString('base64');
+    const headers = {
+      'Authorization': 'Basic ' + basic_auth_string,
+    };
+
+    // If value is true then body sent should be the string "true"
+    const postJSON = bent('POST', 204);
+    await postJSON(url, value.toString(), headers);
+    
+    // if you need to return an error to show the device as "Not Responding" in the Home app:
+    // throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+
+    this.televisionService.updateCharacteristic(this.platform.Characteristic.ActiveIdentifier, value);
+    this.amplifierStates.Source = value as number;
+  }
+
 }
