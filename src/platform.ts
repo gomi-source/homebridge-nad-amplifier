@@ -4,6 +4,8 @@ import { NadAmplifierAccessory } from './platformAccessory.js';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 
 import bent from 'bent';
+import { NadAmplifierVolumeAccessory } from './volumeAccessory.js';
+
 
 /**
  * HomebridgePlatform
@@ -94,6 +96,7 @@ export class NadAmplifierPlatform implements DynamicPlatformPlugin {
       // something globally unique, but constant, for nad, the device serial
       // number or MAC address
       const uuid = this.api.hap.uuid.generate(device.mac_address!);
+      const volUuid = this.api.hap.uuid.generate(device.mac_address! + 'volume');
 
       // see if an accessory with the same uuid has already been registered and restored from
       // the cached devices we stored in the `configureAccessory` method above
@@ -110,6 +113,7 @@ export class NadAmplifierPlatform implements DynamicPlatformPlugin {
         // create the accessory handler for the restored accessory
         // this is imported from `platformAccessory.ts`
         new NadAmplifierAccessory(this, existingAccessory);
+        new NadAmplifierVolumeAccessory(this, existingAccessory);
 
         // it is possible to remove platform accessories at any time using `api.unregisterPlatformAccessories`, e.g.:
         // remove platform accessories when no longer present
@@ -121,17 +125,24 @@ export class NadAmplifierPlatform implements DynamicPlatformPlugin {
 
         // create a new accessory
         const accessory = new this.api.platformAccessory(device.id, uuid);
+        const volumeAccessory = new this.api.platformAccessory(device.id + ' Volume', volUuid);
 
         // store a copy of the device object in the `accessory.context`
         // the `context` property can be used to store any data about the accessory you may need
         accessory.context.device = device;
+        volumeAccessory.context.device = device;
 
         // create the accessory handler for the newly create accessory
         // this is imported from `platformAccessory.ts`
         new NadAmplifierAccessory(this, accessory);
+        new NadAmplifierVolumeAccessory(this, volumeAccessory);
 
         // link the accessory to your platform
-        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [volumeAccessory]);
+        
+        // OR...publish this accessory as an external accessory
+        this.api.publishExternalAccessories(PLUGIN_NAME, [accessory]);
+
       }
 
       // push into discoveredCacheUUIDs
@@ -169,22 +180,22 @@ export class NadAmplifierPlatform implements DynamicPlatformPlugin {
     for (const amp_response of response) {
       this.log.debug(`Amp id from HTTP list amplifiers call: ${amp_response.id}`);  // e.g. "m33"
       
-      const amplifier = new Amplifier(amp_response.id);
+      const device = new Amplifier(amp_response.id);
 
       // Query for info on each amp
       const ampData = await getJSON(this.config.http.basePath + '/amplifiers/' + amp_response.id, '', headers);
       this.log.debug('************ AMPLIFIER DATA RESPONSE ************');
       this.log.debug(ampData);
-      amplifier.amplifier = ampData;
-      amplifier.mac_address = ampData.mac_address;
+      device.amplifier = ampData;
+      device.mac_address = ampData.mac_address;
 
       // Query for inputs on amp
       const sourcesData = await getJSON(this.config.http.basePath + '/amplifiers/' + amp_response.id + '/sources', '', headers);
       this.log.debug('************ AMPLIFIER SOURCES RESPONSE ************');
       this.log.debug(sourcesData);
-      amplifier.sources = sourcesData;
+      device.sources = sourcesData;
 
-      amplifiers.push(amplifier);
+      amplifiers.push(device);
     }
 
     return amplifiers;

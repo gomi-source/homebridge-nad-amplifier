@@ -12,28 +12,11 @@
         "required": true,
         "default": "NAD Amplifier"
       },
-      "inputs": {
-        "title": "Inputs",
-        "type": "array",
-        "items": {
-          "type": "object", 
-          "properties": {
-            "name": {
-              "title": "Name",
-              "type": "string",
-              "description": "Human readable name for the input",
-              "required": true
-            },
-            "sourceNumber": {
-              "title": "Source Number",
-              "description": "The source number for the input. This is the number used in the NAD remote control.",
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 9,
-              "required": true
-            }
-          }
-        }
+      "volumeCap": {
+        "tite": "Cap the volume to avoid accidentally blasting at 100% (I'm looking at you, Siri)",
+        "type": "number",
+        "required": false,
+        "default": 60
       },
       "http": {
         "title": "HTTP",

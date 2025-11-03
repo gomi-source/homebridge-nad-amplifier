@@ -1,9 +1,10 @@
 import bent from 'bent';
 import { connect, MqttClient } from 'mqtt';
 
-import { type CharacteristicValue, type PlatformAccessory, type Service } from 'homebridge';
+import { PlatformAccessory, type CharacteristicValue, type Service } from 'homebridge';
 
 import type { NadAmplifierPlatform } from './platform.js';
+// import { PLUGIN_NAME, PLATFORM_NAME } from './settings.js';
 
 
 /**
@@ -12,25 +13,23 @@ import type { NadAmplifierPlatform } from './platform.js';
  * Each accessory may expose multiple services of different service types.
  */
 export class NadAmplifierAccessory {
-  // private service: Service;
-  // private lightbulbService: Service;
   private televisionService: Service;
+  private inputSourceServices: Service[] = [];
   // private televisionSpeakerService: Service;
-  // private fanService: Service;
   
   private mqtt: MqttClient;
 
   private amplifierStates = {
     Power: false,
-    Mute: false,
-    Volume: 40,
+    // Mute: false,
+    // Volume: 40,
     Source: 99,
   };
 
   private readonly topics: {
-    readonly volume: string;
+    // readonly volume: string;
+    // readonly mute: string;
     readonly power: string;
-    readonly mute: string;
     readonly source: string;
   };
 
@@ -39,15 +38,15 @@ export class NadAmplifierAccessory {
     private readonly accessory: PlatformAccessory,
   ) {
     this.topics = {
-      volume: `${this.platform.config.mqtt.topicBase}/${accessory.context.device.id}/volume_percent`,
+      // volume: `${this.platform.config.mqtt.topicBase}/${accessory.context.device.id}/volume_percent`,
+      // mute: `${this.platform.config.mqtt.topicBase}/${accessory.context.device.id}/mute`,
       power: `${this.platform.config.mqtt.topicBase}/${accessory.context.device.id}/power`,
-      mute: `${this.platform.config.mqtt.topicBase}/${accessory.context.device.id}/mute`,
       source: `${this.platform.config.mqtt.topicBase}/${accessory.context.device.id}/source`,
     };
 
     const mqtt_connection_options = {
       username: this.platform.config.mqtt.username,
-      password: this.platform.config.mqtt.password, // Buffer.from(this.platform.config.mqtt.password), // Passwords are buffers
+      password: this.platform.config.mqtt.password,
     };
     if (this.platform.config.mqtt.username) {
       this.mqtt = connect(`mqtt://${this.platform.config.mqtt.host}:${this.platform.config.mqtt.port}`, mqtt_connection_options);
@@ -71,7 +70,8 @@ export class NadAmplifierAccessory {
       const payload = message.toString();
       this.platform.log.info(`Received message on topic ${topic}: ${payload}`);
       switch (topic) {
-      case this.topics.volume:
+      /*
+        case this.topics.volume:
         this.amplifierStates.Volume = parseInt(payload, 10);
         // this.speaker.updateCharacteristic(this.platform.Characteristic.Volume, parseInt(payload));
         // this.lightbulbService.updateCharacteristic(this.platform.Characteristic.Brightness, parseInt(payload));
@@ -79,16 +79,17 @@ export class NadAmplifierAccessory {
         // this.fanService.updateCharacteristic(this.platform.Characteristic.RotationSpeed, parseInt(payload));
         this.platform.log.debug(`Updating characteristic Volume: ${parseInt(payload)}`);
         break;
+      case this.topics.mute:
+        this.amplifierStates.Mute = payload === 'On';
+        // this.speaker.updateCharacteristic(this.platform.Characteristic.Mute, payload === 'On');
+        // this.televisionSpeakerService.updateCharacteristic(this.platform.Characteristic.Mute, payload === 'On');
+        break;
+      */      
       case this.topics.power:
         this.amplifierStates.Power = payload === 'On';
         // this.speaker.updateCharacteristic(this.platform.Characteristic.Active, payload === 'On');
         this.televisionService.updateCharacteristic(this.platform.Characteristic.Active, payload === 'On');
         // this.fanService.updateCharacteristic(this.platform.Characteristic.On, payload === 'On');
-        break;
-      case this.topics.mute:
-        this.amplifierStates.Mute = payload === 'On';
-        // this.speaker.updateCharacteristic(this.platform.Characteristic.Mute, payload === 'On');
-        // this.televisionSpeakerService.updateCharacteristic(this.platform.Characteristic.Mute, payload === 'On');
         break;
       case this.topics.source:
         this.amplifierStates.Source = parseInt(payload, 10);
@@ -98,18 +99,18 @@ export class NadAmplifierAccessory {
     });
 
     this.amplifierStates.Power = accessory.context.device.amplifier.power;
-    this.amplifierStates.Mute = accessory.context.device.amplifier.mute;
-    this.amplifierStates.Volume = accessory.context.device.amplifier.volume_percent;
-    this.platform.log.debug(`Available context G: ${JSON.stringify(accessory.context.device, null, 2)}`);
+    // this.amplifierStates.Mute = accessory.context.device.amplifier.mute;
+    // this.amplifierStates.Volume = accessory.context.device.amplifier.volume_percent;
+    this.platform.log.debug(`Available context: ${JSON.stringify(accessory.context.device, null, 2)}`);
 
     // set accessory information
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.Manufacturer, 'NAD')
       .setCharacteristic(this.platform.Characteristic.Model, accessory.context.device.id)
-      .setCharacteristic(this.platform.Characteristic.SerialNumber, 'unknown');
+      .setCharacteristic(this.platform.Characteristic.SerialNumber, accessory.context.device.mac_address);
 
     // set the accessory category
-    // this.accessory.category = this.platform.api.hap.Categories.TELEVISION;
+    this.accessory.category = this.platform.api.hap.Categories.AUDIO_RECEIVER;
     
     // TV SERVICE
     // ***********************************************
@@ -142,8 +143,8 @@ export class NadAmplifierAccessory {
     this.televisionService.setCharacteristic(this.platform.Characteristic.SleepDiscoveryMode,
       this.platform.Characteristic.SleepDiscoveryMode.ALWAYS_DISCOVERABLE);
     
-    /* TV SPEAKER SERVICE
-    // ***********************************************
+    // TV SPEAKER SERVICE
+    /* ***********************************************
     this.televisionSpeakerService = this.accessory.getService(this.platform.Service.TelevisionSpeaker)
       || this.accessory.addService(this.platform.Service.TelevisionSpeaker);
 
@@ -157,7 +158,6 @@ export class NadAmplifierAccessory {
       .onGet(this.getVolume.bind(this))
       .onSet(this.setVolume.bind(this));
 
-    /*
     this.televisionSpeakerService.getCharacteristic(this.platform.Characteristic.VolumeSelector)
       .onSet((newValue) => {
         switch(newValue) {
@@ -173,37 +173,37 @@ export class NadAmplifierAccessory {
         }
         }
       });
-    */
-    /*
+
     this.televisionSpeakerService.getCharacteristic(this.platform.Characteristic.VolumeSelector)
       .onSet((newValue) => {
         this.platform.log.info('set VolumeSelector => setNewValue: ' + newValue);
       });
 
-    this.televisionSpeakerService.setCharacteristic(this.platform.Characteristic.VolumeControlType, this.platform.Characteristic.VolumeControlType.ABSOLUTE);
-
+    this.televisionSpeakerService.updateCharacteristic(this.platform.Characteristic.VolumeControlType, this.platform.Characteristic.VolumeControlType.ABSOLUTE);
     this.televisionService.addLinkedService(this.televisionSpeakerService);
     */
+
     // INPUT SOURCE SERVICE
     // ***********************************************
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     accessory.context.device.sources.forEach((input: any) => {
       const subTypeName = JSON.stringify(input.name).replace( /\W/g , '').toLowerCase();
-      const inputSourceService1 = this.accessory.getService(subTypeName)
+      const inputSourceService = this.accessory.getService(input.name)
         || this.accessory.addService(this.platform.Service.InputSource, input.name, subTypeName);
-      inputSourceService1
-        .setCharacteristic(this.platform.Characteristic.Identifier, input.position)
+      inputSourceService
+        .setCharacteristic(this.platform.Characteristic.Identifier, String(input.position))
         .setCharacteristic(this.platform.Characteristic.ConfiguredName, input.name)
         .setCharacteristic(this.platform.Characteristic.IsConfigured, this.platform.Characteristic.IsConfigured.CONFIGURED)
         .setCharacteristic(this.platform.Characteristic.InputSourceType, this.platform.Characteristic.InputSourceType.OTHER)
         .setCharacteristic(this.platform.Characteristic.CurrentVisibilityState, input.is_enabled 
           ? this.platform.Characteristic.CurrentVisibilityState.SHOWN : this.platform.Characteristic.CurrentVisibilityState.HIDDEN);
-      this.televisionService.addLinkedService(inputSourceService1); // link to tv service
+      this.inputSourceServices.push(inputSourceService);
+      this.platform.log.debug(
+        `inputSourceService.serviceId=${inputSourceService.getServiceId()}; identifier=${input.position}; is_enabled=${input.is_enabled}`);
+      this.televisionService.addLinkedService(inputSourceService); // link to tv service
     });
 
-    // this.televisionService.setPrimaryService();
-
-    /* Create a Lightbulb service to control the volume as a dimmer
+    /* Create a Lightbulb service to control the volume through a dimmer
     const lightbulbService = this.accessory.getService(this.platform.Service.Lightbulb) || 
     this.accessory.addService(this.platform.Service.Lightbulb, 'Volume');
 
@@ -211,18 +211,71 @@ export class NadAmplifierAccessory {
       .onGet(this.getVolume.bind(this)) // GET - bind to the correct context
       .onSet(this.setVolume.bind(this)); // SET - bind to the correct context
 
-    tvService.addLinkedService(lightbulbService);
+    this.televisionService.addLinkedService(lightbulbService);
     */
     
-    /* Create a Fan service to control volume
+    /* Create a Fan service to control volume through fan speed
     this.fanService = this.accessory.getService(this.platform.Service.Fan) || this.accessory.addService(this.platform.Service.Fan);
-    this.fanService.setCharacteristic(this.platform.Characteristic.On, true);
-    this.fanService.setCharacteristic(this.platform.Characteristic.Name, 'Volume');
+    this.fanService.updateCharacteristic(this.platform.Characteristic.On, true);
+    this.fanService.updateCharacteristic(this.platform.Characteristic.Name, 'Volume');
 
     this.fanService.getCharacteristic(this.platform.Characteristic.RotationSpeed)
       .onGet(this.getVolume.bind(this))
       .onSet(this.setVolume.bind(this));
     */
+
+    /* Create a Switch Service to control Mute state
+    // switchAccessory = unusedDeviceAccessories.find(function(a) { return a.context.kind === 'SwitchAccessory'; });
+    platform.log.info('Adding new accessory with serial number ' + accessory.context.device.mac_address! + ' and kind SwitchAccessory.');
+    const switchAccessory = new platform.api.platformAccessory(this.televisionService.displayName + ' Settings',
+      this.platform.api.hap.uuid.generate(accessory.context.device.mac_address! + 'SwitchAccessory'));
+    switchAccessory.context.serialNumber = accessory.context.device.mac_address!;
+    switchAccessory.context.kind = 'SwitchAccessory';
+    switchAccessory.getService(this.platform.Service.AccessoryInformation)!
+      .setCharacteristic(this.platform.Characteristic.Manufacturer, 'NAD')
+      .setCharacteristic(this.platform.Characteristic.Model, accessory.context.device.id)
+      .setCharacteristic(this.platform.Characteristic.SerialNumber, accessory.context.device.mac_address);
+
+    if (!switchAccessory.getServiceById(this.platform.Service.Switch, 'AutoMode')) {
+      switchAccessory.addService(this.platform.Service.Switch, this.televisionService.displayName + ' Auto Mode', 'AutoMode');
+    }
+    this.platform.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory, switchAccessory]);
+    // autoModeSwitchService
+
+    /* Updates the auto mode
+    let autoModeSwitchService = null;
+    if (switchAccessory && config.isAutoModeEnabled) {
+      autoModeSwitchService = switchAccessory.getServiceById(platform.Service.Switch, 'AutoMode');
+      if (!autoModeSwitchService) {
+        autoModeSwitchService = switchAccessory.addService(Service.Switch, device.info.name + ' Auto Mode', 'AutoMode');
+      }
+    }
+    autoModeSwitchService.updateCharacteristic(Characteristic.On, content['product-state'].fmod === 'AUTO');
+    */
+
+
+    this.televisionService.setPrimaryService();
+    // this.platform.api.publishExternalAccessories(PLUGIN_NAME, [switchAccessory]);
+    // this.platform.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory, switchAccessory]);
+  }
+
+
+
+
+
+  
+  // Seems to only sort the list of inputs in `settings` unfortunately, the sorting of selector carousel is random (maybe based on UUID?)
+  sortInputs() {
+    // Update DisplayOrder characteristic (base64 encoded)
+    this.inputSourceServices.sort((a, b) => a.displayName.localeCompare(b.displayName));
+    const orderDump = this.inputSourceServices.map(svc => ({ displayName: svc.displayName, iid: svc.iid, name: svc.name, subtype: svc.subtype }));
+    this.platform.log.debug(`Inputs display order:\n${JSON.stringify(orderDump, null, 2)}`);
+    const displayOrder = this.inputSourceServices.map(svc =>
+      String(svc.getCharacteristic(this.platform.Characteristic.Identifier).value)); // String(svc.displayName));
+    this.platform.log.debug(`Display order before encoding:\n${JSON.stringify(displayOrder, null, 2)}`);
+    const encodedOrder = this.platform.api.hap.encode(1, displayOrder).toString('base64'); // api.hap.encode
+    this.platform.log.debug(encodedOrder);
+    this.televisionService.updateCharacteristic(this.platform.Characteristic.DisplayOrder, encodedOrder);
   }
 
   async getPower(): Promise<CharacteristicValue> {
@@ -250,7 +303,7 @@ export class NadAmplifierAccessory {
     this.televisionService.updateCharacteristic(this.platform.Characteristic.Active, value);
     this.amplifierStates.Power = value as boolean;
   }
-
+  /*
   async getMute(): Promise<CharacteristicValue> {
     this.platform.log.debug('Triggered GET Mute: ', this.amplifierStates.Mute);
     return this.amplifierStates.Mute;
@@ -272,8 +325,6 @@ export class NadAmplifierAccessory {
     // if you need to return an error to show the device as "Not Responding" in the Home app:
     // throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
 
-    // this.speaker.updateCharacteristic(this.platform.Characteristic.Mute, value);
-    // this.televisionSpeakerService.updateCharacteristic(this.platform.Characteristic.Mute, value);
     this.amplifierStates.Mute = value as boolean;
   }
 
@@ -303,13 +354,9 @@ export class NadAmplifierAccessory {
     // if you need to return an error to show the device as "Not Responding" in the Home app:
     // throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
 
-    // this.speaker.updateCharacteristic(this.platform.Characteristic.Volume, value);
-    // this.lightbulbService.updateCharacteristic(this.platform.Characteristic.Brightness, value);
-    // this.fanService.updateCharacteristic(this.platform.Characteristic.RotationSpeed, value);
-
     this.amplifierStates.Volume = value as number;
   }
-
+  */
   async getSource(): Promise<CharacteristicValue> {
     this.platform.log.debug('Triggered GET Source: ', this.amplifierStates.Source);
     return this.amplifierStates.Source;
