@@ -10,8 +10,6 @@ import { PLATFORM_NAME, PLUGIN_NAME } from './settings.js';
 import type { NadAccessoryContext, NadAmplifierPlatformConfig, NadDeviceConfig } from './types.js';
 import { normalizeMac } from './util.js';
 
-const DEFAULT_MIN_VOLUME = -60;
-const DEFAULT_VOLUME_CAP = 60;
 const DEFAULT_STREAM_SOURCE_POSITION = 9;
 const DEFAULT_DISCOVERY_INTERVAL_MINUTES = 10;
 
@@ -221,8 +219,6 @@ export class NadAmplifierPlatform implements DynamicPlatformPlugin {
         id: deviceConfig.id,
         macaddress: deviceConfig.macaddress,
         name: displayName,
-        volumeCap: deviceConfig.volumeCap ?? DEFAULT_VOLUME_CAP,
-        minVolume: deviceConfig.minVolume ?? DEFAULT_MIN_VOLUME,
         streamSourcePosition: deviceConfig.streamSourcePosition ?? DEFAULT_STREAM_SOURCE_POSITION,
         host: discovered.host,
         port: discovered.port,

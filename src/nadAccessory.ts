@@ -20,8 +20,8 @@ export class NadAmplifierAccessory {
 
   private active = false;
   private activeIdentifier = 0;
-  /** Current volume in the amplifier's own units (matches the MQTT volume topic, e.g. -60..60). */
-  private volume = 0;
+  /** Current volume, in percent (0-100), as reported by the amplifier's volume_percent telemetry. */
+  private volumePercent = 0;
   private muted = false;
 
   constructor(
@@ -74,7 +74,7 @@ export class NadAmplifierAccessory {
       .onSet(this.setMute.bind(this));
 
     this.speakerService.getCharacteristic(this.platform.Characteristic.Volume)
-      .onGet(() => this.rawVolumeToPercent(this.volume))
+      .onGet(() => this.volumePercent)
       .onSet(this.setVolumePercent.bind(this));
 
     this.speakerService.getCharacteristic(this.platform.Characteristic.VolumeSelector)
@@ -158,14 +158,14 @@ export class NadAmplifierAccessory {
       this.speakerService.updateCharacteristic(this.platform.Characteristic.Mute, this.muted);
       break;
 
-    case 'volume': {
-      const raw = Number(payload);
-      if (Number.isNaN(raw)) {
+    case 'volume_percent': {
+      const percent = Number(payload);
+      if (Number.isNaN(percent)) {
         break;
       }
-      this.volume = raw;
+      this.volumePercent = clamp(Math.round(percent), 0, 100);
       if (!this.muted) {
-        this.speakerService.updateCharacteristic(this.platform.Characteristic.Volume, this.rawVolumeToPercent(raw));
+        this.speakerService.updateCharacteristic(this.platform.Characteristic.Volume, this.volumePercent);
       }
       break;
     }
@@ -207,26 +207,16 @@ export class NadAmplifierAccessory {
 
   private setVolumePercent(value: CharacteristicValue): void {
     const device = this.context.device;
-    const percent = Number(value);
-    const raw = Math.round(device.minVolume + (percent / 100) * (device.volumeCap - device.minVolume));
-    this.volume = raw;
-    this.platform.mqtt?.publish(device.id, 'volume', raw);
+    const percent = clamp(Math.round(Number(value)), 0, 100);
+    this.volumePercent = percent;
+    this.platform.mqtt?.publish(device.id, 'volume_percent', percent);
   }
 
   private setVolumeSelector(value: CharacteristicValue): void {
     const device = this.context.device;
     const delta = value === this.platform.Characteristic.VolumeSelector.INCREMENT ? 1 : -1;
-    const next = clamp(this.volume + delta, device.minVolume, device.volumeCap);
-    this.volume = next;
-    this.platform.mqtt?.publish(device.id, 'volume', next);
-  }
-
-  private rawVolumeToPercent(raw: number): number {
-    const device = this.context.device;
-    const range = device.volumeCap - device.minVolume;
-    if (range <= 0) {
-      return 0;
-    }
-    return clamp(Math.round(((raw - device.minVolume) / range) * 100), 0, 100);
+    const next = clamp(this.volumePercent + delta, 0, 100);
+    this.volumePercent = next;
+    this.platform.mqtt?.publish(device.id, 'volume_percent', next);
   }
 }

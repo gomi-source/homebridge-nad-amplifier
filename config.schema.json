@@ -39,22 +39,6 @@
               "description": "Shown in the Home app. Defaults to \"NAD <model>\".",
               "type": "string"
             },
-            "volumeCap": {
-              "title": "Maximum Volume",
-              "description": "The highest value ever written to the volume topic, and what 100% maps to in the Home app.",
-              "type": "integer",
-              "minimum": -60,
-              "maximum": 60,
-              "default": 60
-            },
-            "minVolume": {
-              "title": "Minimum Volume",
-              "description": "The lowest value ever written to the volume topic, and what 0% (and muting) map to.",
-              "type": "integer",
-              "minimum": -60,
-              "maximum": 60,
-              "default": -60
-            },
             "streamSourcePosition": {
               "title": "BluOS Streaming Source Position",
               "description": "The integer written to the source topic to leave a physical input and return to normal BluOS/streaming playback. Verify against your unit if input switching seems wrong.",

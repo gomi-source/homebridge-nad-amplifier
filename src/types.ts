@@ -20,10 +20,6 @@ export interface NadDeviceConfig {
   macaddress: string;
   /** Friendly display name shown in the Home app. Defaults to "NAD <model>". */
   name?: string;
-  /** Highest value ever written to the volume topic; what 100% (and un-muting) map to. Defaults to 60. */
-  volumeCap?: number;
-  /** Lowest value ever written to the volume topic; what 0% (and muting) map to. Defaults to -60. */
-  minVolume?: number;
   /** Source position that returns the amplifier to normal BluOS/streaming playback. Defaults to 9. */
   streamSourcePosition?: number;
 }
@@ -40,8 +36,6 @@ export interface NadDeviceRuntime {
   id: string;
   macaddress: string;
   name: string;
-  volumeCap: number;
-  minVolume: number;
   streamSourcePosition: number;
   host: string;
   port: number;

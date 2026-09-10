@@ -19,10 +19,6 @@ export const BLUEOS_MDNS_PROTOCOL = 'tcp';
 export const MQTT_ON_PAYLOAD = 'On';
 export const MQTT_OFF_PAYLOAD = 'Off';
 
-/** Amplifier volume range, in the amplifier's own units, as published/subscribed over MQTT. */
-export const DEFAULT_MIN_VOLUME = -60;
-export const DEFAULT_VOLUME_CAP = 60;
-
 /**
  * "source" position written to reach normal BluOS/network streaming playback (as opposed to a physical
  * Capture input). Not returned by /RadioBrowse, since that endpoint only lists physical Capture inputs.

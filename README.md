@@ -33,8 +33,8 @@ Each amplifier is published as its own **external accessory** rather than as a c
    | Power state | `<teleBase>/<id>/power` | `On` / `Off` (also accepts `1`/`0`/`true`) |
    | Set mute | `<cmdBase>/<id>/mute` | `On` / `Off` |
    | Mute state | `<teleBase>/<id>/mute` | `On` / `Off` (also accepts `1`/`0`/`true`) |
-   | Set volume | `<cmdBase>/<id>/volume` | integer, e.g. `-60` to `60` |
-   | Volume state | `<teleBase>/<id>/volume` | integer |
+   | Set volume | `<cmdBase>/<id>/volume_percent` | integer `0`-`100` |
+   | Volume state | `<teleBase>/<id>/volume_percent` | integer `0`-`100` |
    | Set input source | `<cmdBase>/<id>/source` | integer position |
    | Source state | `<teleBase>/<id>/source` | integer position |
 
@@ -51,8 +51,7 @@ Example `config.json` platform block:
   "devices": [
     {
       "id": "m33",
-      "macaddress": "00-00-00-00-00-00",
-      "volumeCap": 60
+      "macaddress": "00-00-00-00-00-00"
     }
   ],
   "mqtt": {
@@ -75,8 +74,6 @@ Example `config.json` platform block:
 | `id` | yes | - | Used as the MQTT topic segment, e.g. `m33` for `cmd/m33/volume`. Not readable from the amplifier - pick your own. |
 | `macaddress` | yes | - | Matches this entry to the amplifier found on the network. |
 | `name` | no | `NAD <model>` | Display name in the Home app. |
-| `volumeCap` | no | `60` | Highest value ever written to the volume topic. Also what 100% (and un-muting to full) map to in the Home app's volume control. Use this to cap how loud Siri/Home can turn the amp up, independent of what the hardware itself supports. |
-| `minVolume` | no | `-60` | Lowest value ever written to the volume topic. What 0% and muting map to. |
 | `streamSourcePosition` | no | `9` | See [Inputs and source positions](#inputs-and-source-positions) below. |
 
 ### `mqtt`
@@ -107,16 +104,15 @@ The input list is read once at startup. If you change what's connected to the am
 
 Apple Home doesn't show a volume slider for TV/receiver-type accessories - this is a HomeKit limitation, not something this plugin works around with an unrelated accessory type (e.g. a fake lightbulb or sensor). What it does implement, natively, on the Television Speaker service:
 
-- **Relative volume** (the physical up/down buttons Siri Remote / Control Center expose for the active audio output) - steps the amplifier by 1 in whichever direction.
-- **Absolute volume**, scaled from `minVolume`-`volumeCap` to 0-100% - not shown in the Home app itself, but visible to other HomeKit apps (e.g. Eve) that do display it.
+- **Relative volume** (the physical up/down buttons Siri Remote / Control Center expose for the active audio output) - steps `volume_percent` by 1 percentage point in whichever direction.
+- **Absolute volume** - read and written directly as the `volume_percent` the amplifier itself publishes/accepts, 0-100% - not shown in the Home app itself, but visible to other HomeKit apps (e.g. Eve) that do display it. There's no unit conversion in the plugin; it neither knows nor needs to know the amplifier's internal volume scale.
 - **Mute** - published straight to the amplifier's own `mute` topic (`On`/`Off`), and reflects the amplifier's real mute state from its `mute` telemetry.
 
 ## Assumptions & things to verify
 
-This plugin was built from a description of one MQTT bridge setup, not by testing against live hardware. Power and mute payloads (`On`/`Off`) are confirmed; a couple of other details are still the best available guess and worth checking once you have it running, all overridable in config:
+This plugin was built from a description of one MQTT bridge setup, not by testing against live hardware. Power, mute and volume topics/payloads (`On`/`Off`, `volume_percent`) are confirmed; one detail is still the best available guess and worth checking once you have it running, overridable in config:
 
 - **BluOS streaming source position**: assumed `9` (see above) - override with `streamSourcePosition` per device.
-- **Volume range**: assumed `-60` to `60`, matching the example in the original request. Override with `minVolume`/`volumeCap` if your amplifier's actual range differs.
 
 ## Development
 
