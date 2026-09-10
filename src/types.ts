@@ -46,4 +46,9 @@ export interface NadDeviceRuntime {
 export interface NadAccessoryContext {
   device: NadDeviceRuntime;
   inputs: CaptureInput[];
+  /** Input position read from /Status at startup, to seed ActiveIdentifier before any MQTT telemetry arrives. */
+  initialActiveIdentifier?: number;
+  /** Volume/mute read from /Status at startup, to seed those characteristics before any MQTT telemetry arrives. */
+  initialVolumePercent?: number;
+  initialMuted?: boolean;
 }

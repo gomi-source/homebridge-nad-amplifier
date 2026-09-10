@@ -1,3 +1,5 @@
+import type { Logging } from 'homebridge';
+
 import { XMLParser } from 'fast-xml-parser';
 
 import { DEFAULT_HTTP_TIMEOUT_MS } from './settings.js';
@@ -17,11 +19,13 @@ export interface BlueOsSyncStatus {
 
 /** A physical Capture input, as read from /RadioBrowse?service=Capture. */
 export interface CaptureInput {
-  /** The integer to write to the "source" MQTT topic to select this input. */
+  /** The integer this input was assigned in the Home app's input list (derived from `id`). */
   position: number;
   name: string;
   id: string;
   inputType: string;
+  /** The exact `url` attribute from /RadioBrowse, used to select this input via /Play?url=... . */
+  playUrl: string;
 }
 
 const xmlParser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
@@ -79,9 +83,11 @@ export async function fetchSyncStatus(
 export async function fetchCaptureInputs(
   host: string,
   port: number,
+  log?: Logging,
   timeoutMs: number = DEFAULT_HTTP_TIMEOUT_MS,
 ): Promise<CaptureInput[]> {
   const xml = await httpGetText(`http://${host}:${port}/RadioBrowse?service=Capture`, timeoutMs);
+  log?.debug('Raw /RadioBrowse?service=Capture response from %s: %s', host, xml);
   const parsed = xmlParser.parse(xml);
   const root = parsed.radiotime;
   if (!root || typeof root !== 'object') {
@@ -109,9 +115,68 @@ export async function fetchCaptureInputs(
       name: String(item['@_text'] ?? id),
       id,
       inputType,
+      // The XML attribute is percent-encoded (e.g. %3A for ':'); decode it once here so
+      // playCaptureInput can send it exactly as-is, matching the raw form confirmed to work
+      // against the amplifier directly (colons/commas/slashes/'?' unencoded).
+      playUrl: decodeURIComponent(String(item['@_URL'] ?? '')),
     });
   }
 
   inputs.sort((a, b) => a.position - b.position);
   return inputs;
+}
+
+/** The subset of /Status this plugin cares about: what input/service is currently active. */
+export interface BlueOsStatus {
+  /** id of the active Capture input (matches a CaptureInput.id from /RadioBrowse), when service is "Capture". */
+  inputId: string;
+  /** "Capture" when a physical input is selected; some other service name otherwise (streaming). */
+  service: string;
+  /** Current volume, already in percent (0-100) - confirmed to match the volume_percent MQTT topic's scale. */
+  volumePercent: number;
+  muted: boolean;
+}
+
+/**
+ * Fetches and parses /Status, used at startup to read the amplifier's *current* input so the Home
+ * app can show it immediately, rather than waiting for the first MQTT telemetry change (which never
+ * comes until something actually changes).
+ */
+export async function fetchStatus(
+  host: string,
+  port: number,
+  log?: Logging,
+  timeoutMs: number = DEFAULT_HTTP_TIMEOUT_MS,
+): Promise<BlueOsStatus> {
+  const xml = await httpGetText(`http://${host}:${port}/Status`, timeoutMs);
+  log?.debug('Raw /Status response from %s: %s', host, xml);
+  const parsed = xmlParser.parse(xml);
+  const node = parsed.status;
+  if (!node || typeof node !== 'object') {
+    throw new Error('Unexpected /Status response: missing <status> element');
+  }
+
+  return {
+    inputId: String(node.inputId ?? ''),
+    service: String(node.service ?? ''),
+    volumePercent: Number(node.volume ?? 0),
+    muted: String(node.mute ?? '0').trim() === '1',
+  };
+}
+
+/**
+ * Selects a physical Capture input by issuing an HTTP GET to /Play?url=<url>, using the exact
+ * `url` value read for that input from /RadioBrowse (see CaptureInput.playUrl). Input switching
+ * isn't reliably controllable over the MQTT "source" topic on this bridge - this HTTP call is
+ * the mechanism confirmed to actually work.
+ */
+export async function playCaptureInput(
+  host: string,
+  port: number,
+  playUrl: string,
+  timeoutMs: number = DEFAULT_HTTP_TIMEOUT_MS,
+): Promise<void> {
+  // playUrl is used as-is, unencoded - this matches the exact request confirmed to work against
+  // the amplifier (e.g. "Capture:hw:imxspdif,0/1/25/2?id=input0"), including its embedded "?".
+  await httpGetText(`http://${host}:${port}/Play?url=${playUrl}`, timeoutMs);
 }

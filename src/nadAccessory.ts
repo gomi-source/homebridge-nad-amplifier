@@ -1,6 +1,6 @@
 import type { CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
 
-import type { CaptureInput } from './blueos.js';
+import { type CaptureInput, playCaptureInput } from './blueos.js';
 import type { NadAmplifierPlatform } from './platform.js';
 import { MQTT_OFF_PAYLOAD, MQTT_ON_PAYLOAD } from './settings.js';
 import type { NadAccessoryContext } from './types.js';
@@ -84,6 +84,20 @@ export class NadAmplifierAccessory {
 
     this.setupInputs(this.context.inputs);
 
+    if (typeof this.context.initialActiveIdentifier === 'number') {
+      this.activeIdentifier = this.context.initialActiveIdentifier;
+      this.televisionService.updateCharacteristic(this.platform.Characteristic.ActiveIdentifier, this.activeIdentifier);
+    }
+
+    if (typeof this.context.initialVolumePercent === 'number') {
+      this.volumePercent = clamp(Math.round(this.context.initialVolumePercent), 0, 100);
+      this.speakerService.updateCharacteristic(this.platform.Characteristic.Volume, this.volumePercent);
+    }
+    if (typeof this.context.initialMuted === 'boolean') {
+      this.muted = this.context.initialMuted;
+      this.speakerService.updateCharacteristic(this.platform.Characteristic.Mute, this.muted);
+    }
+
     this.platform.mqtt?.onDeviceTelemetry(device.id, this.handleTelemetry.bind(this));
     this.platform.mqtt?.subscribeDevice(device.id);
   }
@@ -104,7 +118,7 @@ export class NadAmplifierAccessory {
     const device = this.context.device;
     const allInputs: Array<CaptureInput> = [
       ...inputs,
-      { position: device.streamSourcePosition, name: 'BluOS', id: 'stream', inputType: 'stream' },
+      { position: device.streamSourcePosition, name: 'BluOS', id: 'stream', inputType: 'stream', playUrl: '' },
     ];
 
     const expectedSubtypes = new Set(allInputs.map((input) => `input-${input.position}`));
@@ -197,7 +211,29 @@ export class NadAmplifierAccessory {
   private setActiveIdentifier(value: CharacteristicValue): void {
     const position = Number(value);
     this.activeIdentifier = position;
-    this.platform.mqtt?.publish(this.context.device.id, 'source', position);
+    const device = this.context.device;
+
+    const input = this.context.inputs.find((candidate) => candidate.position === position);
+    this.platform.log.debug(
+      '%s: setActiveIdentifier(%s) -> %s',
+      device.name, position, input ? `matched "${input.name}" with playUrl="${input.playUrl}"` : 'no matching input',
+    );
+
+    if (input?.playUrl) {
+      // A real physical Capture input - selecting it over MQTT isn't reliable, so use the BluOS
+      // HTTP API directly instead, with the exact url read for it from /RadioBrowse.
+      this.platform.log.debug('%s: GET /Play?url=%s', device.name, input.playUrl);
+      playCaptureInput(device.host, device.port, input.playUrl)
+        .then(() => this.platform.log.debug('%s: input switch HTTP call for "%s" completed', device.name, input.name))
+        .catch((err: Error) => {
+          this.platform.log.error('%s: failed to switch to input "%s": %s', device.name, input.name, err.message);
+        });
+    } else {
+      // The synthetic "BluOS" entry (return to normal streaming playback) has no /RadioBrowse
+      // entry or play URL of its own - this is still done over MQTT.
+      this.platform.log.debug('%s: publishing source=%s over MQTT (no playUrl for this position)', device.name, position);
+      this.platform.mqtt?.publish(device.id, 'source', position);
+    }
   }
 
   private setMute(value: CharacteristicValue): void {

@@ -20,8 +20,9 @@ Each amplifier is published as its own **external accessory** rather than as a c
 
 - **Discovery**: BluOS players (which is what NAD's amplifiers run) advertise themselves on the network over mDNS/Bonjour as `_musc._tcp` - the same mechanism the BluOS app and Home Assistant's own Bluesound integration use. This plugin browses for that service type, and for every device it finds, queries its BluOS HTTP API (`/SyncStatus` on port 11000) to read its MAC address, brand and model. Anything that doesn't identify itself as NAD-branded is ignored.
 - **Matching to config**: a discovered amplifier is only added to HomeKit once its MAC address matches an entry you've added under `devices` in the config. This is deliberate - discovery can tell us a NAD amplifier exists at some IP, but not the topic id or volume range to control it with, and this plugin won't guess at those.
-- **Control**: once matched, everything at runtime - power, volume, source - goes over **MQTT**, not the amplifier's HTTP interface. An MQTT broker bridging the amplifier's control topics is a hard prerequisite: the plugin will refuse to add or update any device until an `mqtt` block is present in its config.
-- **Inputs**: the amplifier's own HTTP API (`/RadioBrowse?service=Capture`) is used once, at startup, to read the current list of physical inputs and build the Home app's input picker from it. This is the only other thing the HTTP interface is used for.
+- **Control**: power, volume and mute go over **MQTT**, not the amplifier's HTTP interface. An MQTT broker bridging the amplifier's control topics is a hard prerequisite: the plugin will refuse to add or update any device until an `mqtt` block is present in its config.
+- **Inputs**: the amplifier's own HTTP API (`/RadioBrowse?service=Capture`) is used once, at startup, to read the current list of physical inputs and build the Home app's input picker from it. Selecting one of those physical inputs is also done over HTTP (`/Play?url=...`, using the exact `url` read for it from `/RadioBrowse`) rather than MQTT - see [Inputs and source positions](#inputs-and-source-positions) below for why.
+- **Initial state**: MQTT telemetry only tells you about a *change* - there's nothing to receive until something is switched, so on its own it can't show the amplifier's actual state right after Homebridge starts. To avoid that, the amplifier's `/Status` endpoint is also queried once at startup and used to seed the current input, volume and mute before any telemetry has arrived. Power state isn't covered by this yet.
 
 ## Prerequisites
 
@@ -35,7 +36,7 @@ Each amplifier is published as its own **external accessory** rather than as a c
    | Mute state | `<teleBase>/<id>/mute` | `On` / `Off` (also accepts `1`/`0`/`true`) |
    | Set volume | `<cmdBase>/<id>/volume_percent` | integer `0`-`100` |
    | Volume state | `<teleBase>/<id>/volume_percent` | integer `0`-`100` |
-   | Set input source | `<cmdBase>/<id>/source` | integer position |
+   | Set input source *(streaming only, see below)* | `<cmdBase>/<id>/source` | integer position |
    | Source state | `<teleBase>/<id>/source` | integer position |
 
 2. The amplifier's MAC address (from its own settings page, e.g. `http://<amp-ip>/diagnostics`, or from the BluOS app).
@@ -100,6 +101,8 @@ Since that normal streaming mode isn't listed by `/RadioBrowse` at all (it only 
 
 The input list is read once at startup. If you change what's connected to the amplifier, restart Homebridge to pick up the new list.
 
+**Selecting a physical input doesn't go over MQTT** - on the bridge this plugin was built against, writing to the `source` command topic doesn't reliably switch physical inputs (e.g. HDMI/ARC). Instead, each input's exact `url` attribute from `/RadioBrowse` (e.g. `Capture:hw:imxspdif,0/1/25/2?id=input0`) is read alongside its name and position, and selecting that input in the Home app issues an HTTP `GET /Play?url=<that value>` straight to the amplifier - the same mechanism the BluOS app itself uses. The `source` command topic is still used for exactly one thing: switching back to the synthetic **BluOS** input (leaving Capture mode for normal network/streaming playback), since that isn't a `/RadioBrowse` entry with a `url` of its own.
+
 ## Volume and mute
 
 Apple Home doesn't show a volume slider for TV/receiver-type accessories - this is a HomeKit limitation, not something this plugin works around with an unrelated accessory type (e.g. a fake lightbulb or sensor). What it does implement, natively, on the Television Speaker service:
@@ -110,7 +113,7 @@ Apple Home doesn't show a volume slider for TV/receiver-type accessories - this 
 
 ## Assumptions & things to verify
 
-This plugin was built from a description of one MQTT bridge setup, not by testing against live hardware. Power, mute and volume topics/payloads (`On`/`Off`, `volume_percent`) are confirmed; one detail is still the best available guess and worth checking once you have it running, overridable in config:
+This plugin was built from a description of one MQTT bridge setup, not by testing against live hardware. Power, mute and volume topics/payloads (`On`/`Off`, `volume_percent`) are confirmed, as is input switching via `/Play?url=...` for at least one physical input (HDMI/ARC) - the same mechanism is assumed to generalize to every input `/RadioBrowse` returns, since they all carry the same kind of `url` attribute. One detail is still the best available guess and worth checking once you have it running, overridable in config:
 
 - **BluOS streaming source position**: assumed `9` (see above) - override with `streamSourcePosition` per device.
 

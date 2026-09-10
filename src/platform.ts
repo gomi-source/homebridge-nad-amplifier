@@ -2,7 +2,7 @@ import type { API, Characteristic, DynamicPlatformPlugin, Logging, PlatformAcces
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { type CaptureInput, fetchCaptureInputs } from './blueos.js';
+import { type CaptureInput, fetchCaptureInputs, fetchStatus } from './blueos.js';
 import { type DiscoveredNadDevice, NadDiscovery } from './discovery.js';
 import { NadMqttClient } from './mqttClient.js';
 import { NadAmplifierAccessory } from './nadAccessory.js';
@@ -205,7 +205,8 @@ export class NadAmplifierPlatform implements DynamicPlatformPlugin {
 
     let inputs: CaptureInput[];
     try {
-      inputs = await fetchCaptureInputs(discovered.host, discovered.port);
+      inputs = await fetchCaptureInputs(discovered.host, discovered.port, this.log);
+      this.log.debug('%s: fetched inputs from /RadioBrowse: %s', deviceConfig.id, JSON.stringify(inputs));
     } catch (err) {
       this.log.warn(
         'Could not read the input list from %s (%s). It will be added without inputs for now.',
@@ -214,18 +215,44 @@ export class NadAmplifierPlatform implements DynamicPlatformPlugin {
       inputs = [];
     }
 
+    const streamSourcePosition = deviceConfig.streamSourcePosition ?? DEFAULT_STREAM_SOURCE_POSITION;
+
+    let initialActiveIdentifier: number | undefined;
+    let initialVolumePercent: number | undefined;
+    let initialMuted: boolean | undefined;
+    try {
+      const status = await fetchStatus(discovered.host, discovered.port, this.log);
+      initialActiveIdentifier = status.service === 'Capture'
+        ? inputs.find((input) => input.id === status.inputId)?.position
+        : streamSourcePosition;
+      initialVolumePercent = status.volumePercent;
+      initialMuted = status.muted;
+      this.log.debug(
+        '%s: current status from /Status: service=%s inputId=%s volume=%s mute=%s -> initial ActiveIdentifier=%s',
+        deviceConfig.id, status.service, status.inputId, status.volumePercent, status.muted, initialActiveIdentifier,
+      );
+    } catch (err) {
+      this.log.warn(
+        'Could not read current status from %s (%s). It will start with a default input selection.',
+        discovered.host, (err as Error).message,
+      );
+    }
+
     const context: NadAccessoryContext = {
       device: {
         id: deviceConfig.id,
         macaddress: deviceConfig.macaddress,
         name: displayName,
-        streamSourcePosition: deviceConfig.streamSourcePosition ?? DEFAULT_STREAM_SOURCE_POSITION,
+        streamSourcePosition,
         host: discovered.host,
         port: discovered.port,
         model: discovered.model,
         modelName: discovered.modelName,
       },
       inputs,
+      initialActiveIdentifier,
+      initialVolumePercent,
+      initialMuted,
     };
 
     this.log.info('Publishing accessory: %s', displayName);
