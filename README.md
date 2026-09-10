@@ -103,6 +103,8 @@ The input list is read once at startup. If you change what's connected to the am
 
 **Selecting a physical input doesn't go over MQTT** - on the bridge this plugin was built against, writing to the `source` command topic doesn't reliably switch physical inputs (e.g. HDMI/ARC). Instead, each input's exact `url` attribute from `/RadioBrowse` (e.g. `Capture:hw:imxspdif,0/1/25/2?id=input0`) is read alongside its name and position, and selecting that input in the Home app issues an HTTP `GET /Play?url=<that value>` straight to the amplifier - the same mechanism the BluOS app itself uses. The `source` command topic is still used for exactly one thing: switching back to the synthetic **BluOS** input (leaving Capture mode for normal network/streaming playback), since that isn't a `/RadioBrowse` entry with a `url` of its own.
 
+**`source` telemetry isn't fully trusted either** - the bridge has been observed reporting the streaming position (`streamSourcePosition`) even while a physical Capture input is actually active. Whenever `source` telemetry reports that position, this plugin double-checks it against `/Status` (the same endpoint used for startup state - see [Initial state](#how-it-works) above) before updating the Home app, rather than trusting it at face value.
+
 ## Volume and mute
 
 Apple Home doesn't show a volume slider for TV/receiver-type accessories - this is a HomeKit limitation, not something this plugin works around with an unrelated accessory type (e.g. a fake lightbulb or sensor). What it does implement, natively, on the Television Speaker service:

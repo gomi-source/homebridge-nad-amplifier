@@ -2,7 +2,7 @@
   "name": "homebridge-nad-amplifier",
   "displayName": "NAD Amplifier",
   "type": "module",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Homebridge plugin to control a NAD BluOS amplifier (e.g. M33) from Apple Home, via MQTT.",
   "author": "Anders Ljungh",
   "license": "Apache-2.0",

@@ -1,6 +1,6 @@
 import type { CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
 
-import { type CaptureInput, playCaptureInput } from './blueos.js';
+import { type CaptureInput, fetchStatus, playCaptureInput } from './blueos.js';
 import type { NadAmplifierPlatform } from './platform.js';
 import { MQTT_OFF_PAYLOAD, MQTT_ON_PAYLOAD } from './settings.js';
 import type { NadAccessoryContext } from './types.js';
@@ -189,8 +189,15 @@ export class NadAmplifierAccessory {
       if (Number.isNaN(position)) {
         break;
       }
-      this.activeIdentifier = position;
-      this.televisionService.updateCharacteristic(this.platform.Characteristic.ActiveIdentifier, position);
+      if (position === this.context.device.streamSourcePosition) {
+        // This bridge has been observed reporting the streaming position here even while a physical
+        // Capture input is actually selected - not trustworthy on its own, so confirm via /Status
+        // instead of taking it at face value.
+        this.resolveAmbiguousSource();
+      } else {
+        this.activeIdentifier = position;
+        this.televisionService.updateCharacteristic(this.platform.Characteristic.ActiveIdentifier, position);
+      }
       break;
     }
 
@@ -234,6 +241,32 @@ export class NadAmplifierAccessory {
       this.platform.log.debug('%s: publishing source=%s over MQTT (no playUrl for this position)', device.name, position);
       this.platform.mqtt?.publish(device.id, 'source', position);
     }
+  }
+
+  /**
+   * Confirms the amplifier's actual current input via HTTP /Status, for when "source" telemetry
+   * reports the streaming position but that isn't trustworthy on its own (see handleTelemetry).
+   */
+  private resolveAmbiguousSource(): void {
+    const device = this.context.device;
+    fetchStatus(device.host, device.port, this.platform.log)
+      .then((status) => {
+        const resolved = status.service === 'Capture'
+          ? this.context.inputs.find((input) => input.id === status.inputId)?.position ?? device.streamSourcePosition
+          : device.streamSourcePosition;
+        this.platform.log.debug(
+          '%s: source telemetry reported streaming (%s), but /Status says service=%s inputId=%s -> resolved to %s',
+          device.name, device.streamSourcePosition, status.service, status.inputId, resolved,
+        );
+        this.activeIdentifier = resolved;
+        this.televisionService.updateCharacteristic(this.platform.Characteristic.ActiveIdentifier, resolved);
+      })
+      .catch((err: Error) => {
+        this.platform.log.warn(
+          '%s: could not resolve ambiguous source telemetry via /Status (%s); leaving ActiveIdentifier unchanged',
+          device.name, err.message,
+        );
+      });
   }
 
   private setMute(value: CharacteristicValue): void {
