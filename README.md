@@ -26,7 +26,7 @@ Each amplifier is published as its own **external accessory** rather than as a c
 
 ## Prerequisites
 
-1. An MQTT broker, with something bridging your NAD amplifier's control surface onto it. This plugin does not implement that bridge itself - it assumes the following topics already exist and behave as described (this matches a typical NAD/BluOS MQTT bridge, but if yours differs, see [Assumptions & things to verify](#assumptions--things-to-verify) below):
+1. An MQTT broker, with something bridging your NAD amplifier's control surface onto it. Like [this one](https://github.com/gomi-source/mqtt-nad). This plugin does not implement that bridge itself - it assumes the following topics already exist and behave as described:
 
    | Purpose | Topic | Payload |
    |---|---|---|
@@ -36,7 +36,7 @@ Each amplifier is published as its own **external accessory** rather than as a c
    | Mute state | `<teleBase>/<id>/mute` | `On` / `Off` (also accepts `1`/`0`/`true`) |
    | Set volume | `<cmdBase>/<id>/volume_percent` | integer `0`-`100` |
    | Volume state | `<teleBase>/<id>/volume_percent` | integer `0`-`100` |
-   | Set input source *(streaming only, see below)* | `<cmdBase>/<id>/source` | integer position |
+   | Set input source | `<cmdBase>/<id>/source` | integer position |
    | Source state | `<teleBase>/<id>/source` | integer position |
 
 2. The amplifier's MAC address (from its own settings page, e.g. `http://<amp-ip>/diagnostics`, or from the BluOS app).
@@ -111,11 +111,6 @@ Apple Home doesn't show a volume slider for TV/receiver-type accessories - this 
 - **Absolute volume** - read and written directly as the `volume_percent` the amplifier itself publishes/accepts, 0-100% - not shown in the Home app itself, but visible to other HomeKit apps (e.g. Eve) that do display it. There's no unit conversion in the plugin; it neither knows nor needs to know the amplifier's internal volume scale.
 - **Mute** - published straight to the amplifier's own `mute` topic (`On`/`Off`), and reflects the amplifier's real mute state from its `mute` telemetry.
 
-## Assumptions & things to verify
-
-This plugin was built from a description of one MQTT bridge setup, not by testing against live hardware. Power, mute and volume topics/payloads (`On`/`Off`, `volume_percent`) are confirmed, as is input switching via `/Play?url=...` for at least one physical input (HDMI/ARC) - the same mechanism is assumed to generalize to every input `/RadioBrowse` returns, since they all carry the same kind of `url` attribute. One detail is still the best available guess and worth checking once you have it running, overridable in config:
-
-- **BluOS streaming source position**: assumed `9` (see above) - override with `streamSourcePosition` per device.
 
 ## Development
 
