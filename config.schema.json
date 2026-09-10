@@ -1,0 +1,134 @@
+{
+  "pluginAlias": "NadAmplifier",
+  "pluginType": "platform",
+  "singular": true,
+  "strictValidation": false,
+  "headerDisplay": "Controls a NAD BluOS amplifier (e.g. M33) from Apple Home. Requires an MQTT broker that bridges the amplifier's power/volume/source topics - see the plugin README. The amplifier is found on the network automatically, but is only added to HomeKit once its MAC address has been added below.",
+  "schema": {
+    "type": "object",
+    "required": ["name", "mqtt"],
+    "additionalProperties": false,
+    "properties": {
+      "name": {
+        "title": "Name",
+        "type": "string",
+        "default": "NAD Amplifier"
+      },
+      "devices": {
+        "title": "Devices",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["id", "macaddress"],
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "title": "Device ID",
+              "description": "Used as the MQTT topic segment for this device, e.g. \"m33\" for cmd/m33/volume. Not readable from the amplifier - choose your own.",
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            "macaddress": {
+              "title": "MAC Address",
+              "description": "Matches this entry to the amplifier found on the network. Find it on the amplifier's own settings page, or in the BluOS app.",
+              "type": "string",
+              "pattern": "^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$"
+            },
+            "name": {
+              "title": "Display Name",
+              "description": "Shown in the Home app. Defaults to \"NAD <model>\".",
+              "type": "string"
+            },
+            "volumeCap": {
+              "title": "Maximum Volume",
+              "description": "The highest value ever written to the volume topic, and what 100% maps to in the Home app.",
+              "type": "integer",
+              "minimum": -60,
+              "maximum": 60,
+              "default": 60
+            },
+            "minVolume": {
+              "title": "Minimum Volume",
+              "description": "The lowest value ever written to the volume topic, and what 0% (and muting) map to.",
+              "type": "integer",
+              "minimum": -60,
+              "maximum": 60,
+              "default": -60
+            },
+            "streamSourcePosition": {
+              "title": "BluOS Streaming Source Position",
+              "description": "The integer written to the source topic to leave a physical input and return to normal BluOS/streaming playback. Verify against your unit if input switching seems wrong.",
+              "type": "integer",
+              "default": 9
+            }
+          }
+        }
+      },
+      "mqtt": {
+        "title": "MQTT Broker",
+        "description": "Required - this plugin is controlled entirely through MQTT, not through the amplifier's own HTTP interface.",
+        "type": "object",
+        "required": ["host"],
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "port": {
+            "title": "Port",
+            "type": "integer",
+            "default": 1883
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          },
+          "password": {
+            "title": "Password",
+            "type": "string",
+            "x-schema-form": {
+              "type": "password"
+            }
+          },
+          "topicBaseCommand": {
+            "title": "Command Topic Base",
+            "description": "e.g. \"cmd\" for cmd/<id>/volume.",
+            "type": "string",
+            "default": "cmd"
+          },
+          "topicBaseTelemetry": {
+            "title": "Telemetry Topic Base",
+            "description": "e.g. \"tele\" for tele/<id>/volume.",
+            "type": "string",
+            "default": "tele"
+          },
+          "payloads": {
+            "title": "Power Payloads",
+            "description": "Only change these if your MQTT bridge expects something other than \"1\"/\"0\" for power on/off.",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "powerOn": {
+                "title": "Power On Payload",
+                "type": "string",
+                "default": "1"
+              },
+              "powerOff": {
+                "title": "Power Off Payload",
+                "type": "string",
+                "default": "0"
+              }
+            }
+          }
+        }
+      },
+      "discoveryIntervalMinutes": {
+        "title": "Network Re-scan Interval (minutes)",
+        "description": "How often to re-check the network for configured amplifiers - handles a changed IP address or a device that was offline at startup. Set to 0 to disable.",
+        "type": "integer",
+        "default": 10
+      }
+    }
+  }
+}
