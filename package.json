@@ -6,13 +6,13 @@
   "description": "Homebridge plugin to control a NAD BluOS amplifier (e.g. M33) from Apple Home, via MQTT.",
   "author": "Anders Ljungh",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/USERNAME/homebridge-nad-amplifier#readme",
+  "homepage": "https://github.com/gomi-source/homebridge-nad-amplifier#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/USERNAME/homebridge-nad-amplifier.git"
+    "url": "https://github.com/gomi-source/homebridge-nad-amplifier.git"
   },
   "bugs": {
-    "url": "https://github.com/USERNAME/homebridge-nad-amplifier/issues"
+    "url": "https://github.com/gomi-source/homebridge-nad-amplifier/issues"
   },
   "keywords": [
     "homebridge-plugin",
