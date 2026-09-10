@@ -77,13 +77,13 @@
           },
           "topicBaseCommand": {
             "title": "Command Topic Base",
-            "description": "e.g. \"cmd\" for cmd/<id>/volume.",
+            "description": "e.g. \"cmd\" for cmd/{id}/volume.",
             "type": "string",
             "default": "cmd"
           },
           "topicBaseTelemetry": {
             "title": "Telemetry Topic Base",
-            "description": "e.g. \"tele\" for tele/<id>/volume.",
+            "description": "e.g. \"tele\" for tele/{id}/volume.",
             "type": "string",
             "default": "tele"
           }
