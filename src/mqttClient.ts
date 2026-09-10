@@ -43,7 +43,10 @@ export class NadMqttClient {
     client.on('reconnect', () => this.log.debug('Reconnecting to MQTT broker at %s:%d...', this.config.host, port));
     client.on('close', () => this.log.debug('MQTT connection closed'));
     client.on('error', (err: Error) => this.log.error('MQTT client error: %s', err.message));
-    client.on('message', (topic: string, payload: Buffer) => this.dispatch(topic, payload));
+    client.on('message', (topic: string, payload: Buffer) => {
+      this.log.debug('MQTT message received: %s = "%s"', topic, payload.toString('utf8'));
+      this.dispatch(topic, payload);
+    });
   }
 
   /** Registers the handler that receives telemetry updates ("<key>", "<payload>") for one device id. */
@@ -84,12 +87,29 @@ export class NadMqttClient {
   }
 
   private dispatch(topic: string, payload: Buffer): void {
-    const parts = topic.split('/');
-    if (parts.length < 3 || parts[0] !== this.telemetryBase) {
+    // Matched by prefix, not by splitting and indexing positionally - telemetryBase may itself
+    // contain a slash (e.g. "tele/control"), so a naive split('/') would misread its second
+    // segment as the device id.
+    const prefix = `${this.telemetryBase}/`;
+    if (!topic.startsWith(prefix)) {
+      this.log.debug('Ignoring message on "%s": does not start with telemetry base "%s"', topic, this.telemetryBase);
       return;
     }
-    const deviceId = parts[1];
-    const key = parts.slice(2).join('/');
-    this.handlers.get(deviceId)?.(key, payload.toString('utf8'));
+    const rest = topic.slice(prefix.length);
+    const slashIndex = rest.indexOf('/');
+    if (slashIndex === -1) {
+      return;
+    }
+    const deviceId = rest.slice(0, slashIndex);
+    const key = rest.slice(slashIndex + 1);
+    const handler = this.handlers.get(deviceId);
+    if (!handler) {
+      this.log.debug(
+        'No telemetry handler registered for device id "%s" (known ids: %s)',
+        deviceId, [...this.handlers.keys()].join(', ') || '<none>',
+      );
+      return;
+    }
+    handler(key, payload.toString('utf8'));
   }
 }

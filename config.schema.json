@@ -102,24 +102,6 @@
             "description": "e.g. \"tele\" for tele/<id>/volume.",
             "type": "string",
             "default": "tele"
-          },
-          "payloads": {
-            "title": "Power Payloads",
-            "description": "Only change these if your MQTT bridge expects something other than \"1\"/\"0\" for power on/off.",
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "powerOn": {
-                "title": "Power On Payload",
-                "type": "string",
-                "default": "1"
-              },
-              "powerOff": {
-                "title": "Power Off Payload",
-                "type": "string",
-                "default": "0"
-              }
-            }
           }
         }
       },

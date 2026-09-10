@@ -14,6 +14,8 @@ A [Homebridge](https://homebridge.io) plugin that exposes a NAD BluOS amplifier 
 
 There's no HomeKit service type for an amplifier or AV receiver, so this plugin registers the amplifier as a **Television** accessory with its category set to `AUDIO_RECEIVER`, which gets it a proper receiver icon and remote-style controls in the Home app instead of a TV icon.
 
+Each amplifier is published as its own **external accessory** rather than as a child of Homebridge's shared bridge - HomeKit only honors an accessory's category (and so the receiver icon) for standalone accessories, not ones bridged under a shared pairing. That has two consequences worth knowing about: each amplifier needs its own "Add Accessory" step in the Home app, with its own setup code that Homebridge logs at startup (separate from the main bridge's code); and there is no API to unpublish an external accessory, so removing a device from `devices` in config stops it from being republished but does not remove any existing HomeKit pairing for it - the plugin will log a warning identifying it when this happens, and you'll need to remove it from the Home app yourself (press and hold the tile, then Remove Accessory).
+
 ## How it works
 
 - **Discovery**: BluOS players (which is what NAD's amplifiers run) advertise themselves on the network over mDNS/Bonjour as `_musc._tcp` - the same mechanism the BluOS app and Home Assistant's own Bluesound integration use. This plugin browses for that service type, and for every device it finds, queries its BluOS HTTP API (`/SyncStatus` on port 11000) to read its MAC address, brand and model. Anything that doesn't identify itself as NAD-branded is ignored.
@@ -27,8 +29,10 @@ There's no HomeKit service type for an amplifier or AV receiver, so this plugin 
 
    | Purpose | Topic | Payload |
    |---|---|---|
-   | Set power | `<cmdBase>/<id>/power` | `1` = on, `0` = off (configurable) |
-   | Power state | `<teleBase>/<id>/power` | `1`/`0` (also accepts `true`/`on`) |
+   | Set power | `<cmdBase>/<id>/power` | `On` / `Off` |
+   | Power state | `<teleBase>/<id>/power` | `On` / `Off` (also accepts `1`/`0`/`true`) |
+   | Set mute | `<cmdBase>/<id>/mute` | `On` / `Off` |
+   | Mute state | `<teleBase>/<id>/mute` | `On` / `Off` (also accepts `1`/`0`/`true`) |
    | Set volume | `<cmdBase>/<id>/volume` | integer, e.g. `-60` to `60` |
    | Volume state | `<teleBase>/<id>/volume` | integer |
    | Set input source | `<cmdBase>/<id>/source` | integer position |
@@ -84,7 +88,6 @@ Example `config.json` platform block:
 | `username` / `password` | no | - |
 | `topicBaseCommand` | no | `cmd` |
 | `topicBaseTelemetry` | no | `tele` |
-| `payloads.powerOn` / `payloads.powerOff` | no | `"1"` / `"0"` |
 
 ### `discoveryIntervalMinutes`
 
@@ -106,13 +109,12 @@ Apple Home doesn't show a volume slider for TV/receiver-type accessories - this 
 
 - **Relative volume** (the physical up/down buttons Siri Remote / Control Center expose for the active audio output) - steps the amplifier by 1 in whichever direction.
 - **Absolute volume**, scaled from `minVolume`-`volumeCap` to 0-100% - not shown in the Home app itself, but visible to other HomeKit apps (e.g. Eve) that do display it.
-- **Mute** - the MQTT bridge described above has no dedicated mute topic, so this is a *software* mute: muting remembers the current volume and sets the amplifier to `minVolume`; un-muting restores it. It does not reflect a hardware mute state, since there's nothing to read one from.
+- **Mute** - published straight to the amplifier's own `mute` topic (`On`/`Off`), and reflects the amplifier's real mute state from its `mute` telemetry.
 
 ## Assumptions & things to verify
 
-This plugin was built from a description of one MQTT bridge setup, not by testing against live hardware. A few details are the best available guess and worth checking once you have it running, all overridable in config:
+This plugin was built from a description of one MQTT bridge setup, not by testing against live hardware. Power and mute payloads (`On`/`Off`) are confirmed; a couple of other details are still the best available guess and worth checking once you have it running, all overridable in config:
 
-- **Power payload**: assumed `"1"`/`"0"`. Override with `mqtt.payloads.powerOn`/`powerOff` if your bridge expects something else (e.g. `"ON"`/`"OFF"`).
 - **BluOS streaming source position**: assumed `9` (see above) - override with `streamSourcePosition` per device.
 - **Volume range**: assumed `-60` to `60`, matching the example in the original request. Override with `minVolume`/`volumeCap` if your amplifier's actual range differs.
 

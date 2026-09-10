@@ -2,6 +2,7 @@ import type { CharacteristicValue, PlatformAccessory, Service } from 'homebridge
 
 import type { CaptureInput } from './blueos.js';
 import type { NadAmplifierPlatform } from './platform.js';
+import { MQTT_OFF_PAYLOAD, MQTT_ON_PAYLOAD } from './settings.js';
 import type { NadAccessoryContext } from './types.js';
 import { clamp } from './util.js';
 
@@ -22,7 +23,6 @@ export class NadAmplifierAccessory {
   /** Current volume in the amplifier's own units (matches the MQTT volume topic, e.g. -60..60). */
   private volume = 0;
   private muted = false;
-  private volumeBeforeMute = 0;
 
   constructor(
     private readonly platform: NadAmplifierPlatform,
@@ -143,6 +143,7 @@ export class NadAmplifierAccessory {
   }
 
   private handleTelemetry(key: string, payload: string): void {
+    this.platform.log.debug('%s: telemetry %s = "%s"', this.context.device.name, key, payload);
     switch (key) {
     case 'power':
       this.active = this.isTruthyPayload(payload);
@@ -150,6 +151,11 @@ export class NadAmplifierAccessory {
         this.platform.Characteristic.Active,
         this.active ? this.platform.Characteristic.Active.ACTIVE : this.platform.Characteristic.Active.INACTIVE,
       );
+      break;
+
+    case 'mute':
+      this.muted = this.isTruthyPayload(payload);
+      this.speakerService.updateCharacteristic(this.platform.Characteristic.Mute, this.muted);
       break;
 
     case 'volume': {
@@ -185,9 +191,7 @@ export class NadAmplifierAccessory {
 
   private async setActive(value: CharacteristicValue): Promise<void> {
     this.active = value === this.platform.Characteristic.Active.ACTIVE;
-    const payloads = this.platform.config.mqtt?.payloads;
-    const payload = this.active ? (payloads?.powerOn ?? '1') : (payloads?.powerOff ?? '0');
-    this.platform.mqtt?.publish(this.context.device.id, 'power', payload);
+    this.platform.mqtt?.publish(this.context.device.id, 'power', this.active ? MQTT_ON_PAYLOAD : MQTT_OFF_PAYLOAD);
   }
 
   private setActiveIdentifier(value: CharacteristicValue): void {
@@ -197,16 +201,8 @@ export class NadAmplifierAccessory {
   }
 
   private setMute(value: CharacteristicValue): void {
-    const device = this.context.device;
-    const shouldMute = Boolean(value);
-    if (shouldMute && !this.muted) {
-      this.volumeBeforeMute = this.volume;
-      this.muted = true;
-      this.platform.mqtt?.publish(device.id, 'volume', device.minVolume);
-    } else if (!shouldMute && this.muted) {
-      this.muted = false;
-      this.platform.mqtt?.publish(device.id, 'volume', this.volumeBeforeMute);
-    }
+    this.muted = Boolean(value);
+    this.platform.mqtt?.publish(this.context.device.id, 'mute', this.muted ? MQTT_ON_PAYLOAD : MQTT_OFF_PAYLOAD);
   }
 
   private setVolumePercent(value: CharacteristicValue): void {
@@ -214,7 +210,6 @@ export class NadAmplifierAccessory {
     const percent = Number(value);
     const raw = Math.round(device.minVolume + (percent / 100) * (device.volumeCap - device.minVolume));
     this.volume = raw;
-    this.muted = false;
     this.platform.mqtt?.publish(device.id, 'volume', raw);
   }
 

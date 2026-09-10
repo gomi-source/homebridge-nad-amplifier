@@ -1,4 +1,6 @@
 import type { API, Characteristic, DynamicPlatformPlugin, Logging, PlatformAccessory, PlatformConfig, Service } from 'homebridge';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 import { type CaptureInput, fetchCaptureInputs } from './blueos.js';
 import { type DiscoveredNadDevice, NadDiscovery } from './discovery.js';
@@ -13,25 +15,39 @@ const DEFAULT_VOLUME_CAP = 60;
 const DEFAULT_STREAM_SOURCE_POSITION = 9;
 const DEFAULT_DISCOVERY_INTERVAL_MINUTES = 10;
 
+/** Name of the file (in Homebridge's storage directory) tracking which devices this plugin has ever published. */
+const PUBLISHED_DEVICES_FILE = 'nad-amplifier-published-devices.json';
+
+interface PublishedDeviceRecord {
+  name: string;
+  macaddress: string;
+}
+
 /**
  * Main platform: validates config, finds NAD amplifiers on the network, matches them against
- * configured devices by MAC address, and registers/updates HomeKit accessories for the matches.
+ * configured devices by MAC address, and publishes HomeKit accessories for the matches.
  *
  * A device found on the network is never added to HomeKit until it has a matching entry (by MAC
  * address) under `devices` in the config, since without it we have no MQTT topic id or volume range
  * to control it with - and this plugin requires MQTT as its prerequisite control channel, so nothing
  * is registered at all until an "mqtt" block is present in the config.
+ *
+ * Accessories are published with `publishExternalAccessories` rather than `registerPlatformAccessories`:
+ * HomeKit only honors an accessory's Category (and so the receiver icon) for standalone accessories,
+ * not ones bridged under Homebridge's shared pairing. The tradeoff is that Homebridge never restores
+ * these from its own accessory cache (`configureAccessory` is never called for them) and there is no
+ * API to unpublish one - see warnAboutRemovedDevices() below for how removal is handled instead.
  */
 export class NadAmplifierPlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service;
   public readonly Characteristic: typeof Characteristic;
   public readonly config: NadAmplifierPlatformConfig;
-  public readonly accessories = new Map<string, PlatformAccessory>();
   public mqtt?: NadMqttClient;
 
   private readonly configuredDevicesByMac = new Map<string, NadDeviceConfig>();
   private readonly loggedUnconfiguredMacs = new Set<string>();
   private readonly liveAccessories = new Map<string, NadAmplifierAccessory>();
+  private readonly publishedDevicesFile: string;
   private discovery?: NadDiscovery;
   private rescanTimer?: ReturnType<typeof setInterval>;
 
@@ -43,6 +59,7 @@ export class NadAmplifierPlatform implements DynamicPlatformPlugin {
     this.config = config as NadAmplifierPlatformConfig;
     this.Service = api.hap.Service;
     this.Characteristic = api.hap.Characteristic;
+    this.publishedDevicesFile = path.join(this.api.user.storagePath(), PUBLISHED_DEVICES_FILE);
 
     for (const device of this.config.devices ?? []) {
       if (!device.id || !device.macaddress) {
@@ -66,14 +83,24 @@ export class NadAmplifierPlatform implements DynamicPlatformPlugin {
     });
   }
 
-  /** Invoked by Homebridge for every accessory it restored from its cache on disk. */
+  /**
+   * Invoked by Homebridge for any accessory it restored from its platform-accessory cache. This
+   * plugin no longer uses that mechanism (see the class comment above), so any accessory that shows
+   * up here is a leftover from before the switch to external accessories - unregister it immediately
+   * rather than leaving a stale, never-updated duplicate of the (now externally-published) accessory.
+   */
   configureAccessory(accessory: PlatformAccessory): void {
-    this.log.info('Loading accessory from cache:', accessory.displayName);
-    this.accessories.set(accessory.UUID, accessory);
+    this.log.info(
+      '"%s" was cached from the old platform-accessory registration; this plugin now publishes devices as ' +
+      'external accessories instead, so this stale cache entry is being removed. If it left behind a duplicate ' +
+      'tile in the Home app, remove that one manually.',
+      accessory.displayName,
+    );
+    this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
   }
 
   private startPlatform(): void {
-    this.removeAccessoriesForRemovedDevices();
+    this.warnAboutRemovedDevices();
 
     if (!this.config.mqtt?.host) {
       this.log.error(
@@ -96,23 +123,50 @@ export class NadAmplifierPlatform implements DynamicPlatformPlugin {
   }
 
   /**
-   * Removes any cached accessory whose device is no longer present under "devices" in the config.
-   * This runs unconditionally at startup (even if MQTT is missing) so that deleting a device from
-   * the config is enough to remove it, without needing it to be rediscovered on the network first.
+   * External accessories have no "unpublish" API, so a device removed from config can't be cleaned
+   * out of HomeKit automatically - the best this plugin can do is notice the removal and say so
+   * loudly, rather than leaving it to silently show "No Response" forever with no explanation.
+   *
+   * This works by keeping its own small record (in Homebridge's storage directory, not the HomeKit
+   * accessory cache) of every device id/MAC this plugin has been configured to publish. Every startup,
+   * anything in that record that's no longer in the current config gets a warning; the record is then
+   * overwritten with the current config's device list.
    */
-  private removeAccessoriesForRemovedDevices(): void {
-    const expectedUUIDs = new Set(
-      Array.from(this.configuredDevicesByMac.values())
-        .map((device) => this.api.hap.uuid.generate(normalizeMac(device.macaddress))),
-    );
+  private warnAboutRemovedDevices(): void {
+    const previouslyPublished = this.readPublishedDevicesRecord();
 
-    for (const [uuid, accessory] of this.accessories) {
-      if (!expectedUUIDs.has(uuid)) {
-        this.log.info('Removing accessory for a device no longer present in config: %s', accessory.displayName);
-        this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-        this.accessories.delete(uuid);
-        this.liveAccessories.delete(uuid);
+    for (const [mac, info] of Object.entries(previouslyPublished)) {
+      if (!this.configuredDevicesByMac.has(mac)) {
+        this.log.warn(
+          'Device "%s" (MAC %s) is no longer in your config. It cannot be removed from HomeKit automatically ' +
+          '(external accessories have no "unpublish" API) - if it was added to the Home app, remove it manually ' +
+          '(press and hold the tile, then Remove Accessory), or it will keep showing as "No Response".',
+          info.name, info.macaddress,
+        );
       }
+    }
+
+    const updated: Record<string, PublishedDeviceRecord> = {};
+    for (const [mac, deviceConfig] of this.configuredDevicesByMac) {
+      updated[mac] = { name: deviceConfig.name?.trim() || deviceConfig.id, macaddress: deviceConfig.macaddress };
+    }
+    this.writePublishedDevicesRecord(updated);
+  }
+
+  private readPublishedDevicesRecord(): Record<string, PublishedDeviceRecord> {
+    try {
+      const raw = fs.readFileSync(this.publishedDevicesFile, 'utf8');
+      return JSON.parse(raw) as Record<string, PublishedDeviceRecord>;
+    } catch {
+      return {};
+    }
+  }
+
+  private writePublishedDevicesRecord(record: Record<string, PublishedDeviceRecord>): void {
+    try {
+      fs.writeFileSync(this.publishedDevicesFile, JSON.stringify(record, null, 2));
+    } catch (err) {
+      this.log.debug('Could not persist the published-devices record: %s', (err as Error).message);
     }
   }
 
@@ -142,8 +196,9 @@ export class NadAmplifierPlatform implements DynamicPlatformPlugin {
 
     const existingHandler = this.liveAccessories.get(uuid);
     if (existingHandler) {
-      // Already set up and subscribed - just refresh the connection details in case the IP changed,
-      // rather than tearing down and recreating in-memory state (active/volume/mute) on every rescan.
+      // Already published and subscribed this run - just refresh the connection details in case the
+      // IP changed, rather than tearing down in-memory state (active/volume/mute) or trying to
+      // publish the same external accessory UUID a second time.
       existingHandler.updateConnection(discovered.host, discovered.port);
       return;
     }
@@ -177,18 +232,10 @@ export class NadAmplifierPlatform implements DynamicPlatformPlugin {
       inputs,
     };
 
-    let accessory = this.accessories.get(uuid);
-    if (accessory) {
-      this.log.info('Restoring existing accessory: %s', displayName);
-      accessory.context = context;
-      this.api.updatePlatformAccessories([accessory]);
-    } else {
-      this.log.info('Adding new accessory: %s', displayName);
-      accessory = new this.api.platformAccessory(displayName, uuid, this.api.hap.Categories.AUDIO_RECEIVER);
-      accessory.context = context;
-      this.accessories.set(uuid, accessory);
-      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-    }
+    this.log.info('Publishing accessory: %s', displayName);
+    const accessory = new this.api.platformAccessory(displayName, uuid, this.api.hap.Categories.AUDIO_RECEIVER);
+    accessory.context = context;
+    this.api.publishExternalAccessories(PLUGIN_NAME, [accessory]);
 
     this.liveAccessories.set(uuid, new NadAmplifierAccessory(this, accessory));
   }

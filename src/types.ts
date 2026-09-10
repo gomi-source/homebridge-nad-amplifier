@@ -2,13 +2,6 @@ import type { PlatformConfig } from 'homebridge';
 
 import type { CaptureInput } from './blueos.js';
 
-export interface MqttPayloadsConfig {
-  /** Payload published to power on the amplifier. Defaults to "1". */
-  powerOn?: string;
-  /** Payload published to power off the amplifier. Defaults to "0". */
-  powerOff?: string;
-}
-
 export interface MqttConfig {
   host: string;
   port?: number;
@@ -18,7 +11,6 @@ export interface MqttConfig {
   topicBaseCommand?: string;
   /** Base of the telemetry topic, e.g. "tele" for tele/<id>/volume. Defaults to "tele". */
   topicBaseTelemetry?: string;
-  payloads?: MqttPayloadsConfig;
 }
 
 export interface NadDeviceConfig {

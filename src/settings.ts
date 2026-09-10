@@ -15,6 +15,10 @@ export const BLUEOS_API_PORT = 11000;
 export const BLUEOS_MDNS_TYPE = 'musc';
 export const BLUEOS_MDNS_PROTOCOL = 'tcp';
 
+/** Payload the amplifier's MQTT bridge expects for on/off (power) and on/off (mute). */
+export const MQTT_ON_PAYLOAD = 'On';
+export const MQTT_OFF_PAYLOAD = 'Off';
+
 /** Amplifier volume range, in the amplifier's own units, as published/subscribed over MQTT. */
 export const DEFAULT_MIN_VOLUME = -60;
 export const DEFAULT_VOLUME_CAP = 60;
