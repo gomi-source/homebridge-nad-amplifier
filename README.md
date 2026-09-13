@@ -91,6 +91,12 @@ Example `config.json` platform block:
 
 How often (in minutes) to re-scan the network for configured amplifiers, to pick up an IP address change or a device that was offline at startup. Default `10`; set to `0` to disable.
 
+### `instanceId` - running more than one Homebridge instance against the same amplifier
+
+Each accessory's HomeKit identifier is derived from its MAC address alone, which is fine as long as only one Homebridge instance is ever configured for a given physical amplifier. If you run two (e.g. a dev instance alongside production, both pointed at the same amp for testing), they'll derive the *same* identifier and collide in the Home app - usually seen as being unable to add the accessory from the second instance at all.
+
+Set `instanceId` to a different string in each instance's config (e.g. `"dev"` on the dev instance, left unset on production) to mix something instance-specific into the identifier. Leave it unset if you only ever run one Homebridge instance against your amplifier(s) - this is opt-in specifically so existing single-instance setups aren't affected and don't need to re-pair anything.
+
 ## Inputs and source positions
 
 `/RadioBrowse?service=Capture` returns each physical input's internal id, e.g. `xdynamic-Source3` or `input0`. The integer written to the `source` MQTT topic is derived from the trailing number in that id (so `xdynamic-Source3` -> `3`, `input0` -> `0`).

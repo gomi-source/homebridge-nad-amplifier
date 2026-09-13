@@ -190,7 +190,13 @@ export class NadAmplifierPlatform implements DynamicPlatformPlugin {
   }
 
   private async registerDevice(deviceConfig: NadDeviceConfig, discovered: DiscoveredNadDevice): Promise<void> {
-    const uuid = this.api.hap.uuid.generate(normalizeMac(deviceConfig.macaddress));
+    // Normally just the MAC address - unique enough within one Homebridge instance. If instanceId is
+    // set (running more than one Homebridge instance against the same amplifier), it's mixed in too,
+    // so each instance derives a different identifier for what is otherwise the same physical device.
+    const uuidSeed = this.config.instanceId
+      ? `${normalizeMac(deviceConfig.macaddress)}:${this.config.instanceId}`
+      : normalizeMac(deviceConfig.macaddress);
+    const uuid = this.api.hap.uuid.generate(uuidSeed);
 
     const existingHandler = this.liveAccessories.get(uuid);
     if (existingHandler) {

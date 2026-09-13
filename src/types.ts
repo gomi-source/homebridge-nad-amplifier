@@ -29,6 +29,14 @@ export interface NadAmplifierPlatformConfig extends PlatformConfig {
   mqtt?: MqttConfig;
   /** How often (in minutes) to re-scan the network for configured amplifiers. 0 disables re-scanning. */
   discoveryIntervalMinutes?: number;
+  /**
+   * Mixed into each accessory's HomeKit identifier alongside its MAC address. Only needed if more than
+   * one Homebridge instance (e.g. dev and production) is configured against the same physical
+   * amplifier(s) - without this, both instances derive the exact same identifier from the MAC address
+   * alone and collide in the Home app. Leave unset for a single Homebridge instance; give each
+   * instance its own distinct value (e.g. "dev") if you run more than one against the same hardware.
+   */
+  instanceId?: string;
 }
 
 /** Fully-resolved, defaulted runtime settings for one accessory - stored in accessory.context. */

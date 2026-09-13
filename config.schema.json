@@ -93,7 +93,12 @@
         "title": "Network Re-scan Interval (minutes)",
         "description": "How often to re-check the network for configured amplifiers - handles a changed IP address or a device that was offline at startup. Set to 0 to disable.",
         "type": "integer",
-        "default": 10
+        "default": 0
+      },
+      "instanceId": {
+        "title": "Instance ID",
+        "description": "Only needed if you run more than one Homebridge instance (e.g. dev and production) against the same physical amplifier(s). Leave blank for a single instance; otherwise give each instance a different value (e.g. \"dev\") so they do not generate colliding HomeKit accessory IDs.",
+        "type": "string"
       }
     }
   }
