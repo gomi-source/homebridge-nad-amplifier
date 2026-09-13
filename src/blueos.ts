@@ -132,9 +132,6 @@ export interface BlueOsStatus {
   inputId: string;
   /** "Capture" when a physical input is selected; some other service name otherwise (streaming). */
   service: string;
-  /** Current volume, already in percent (0-100) - confirmed to match the volume_percent MQTT topic's scale. */
-  volumePercent: number;
-  muted: boolean;
 }
 
 /**
@@ -159,8 +156,6 @@ export async function fetchStatus(
   return {
     inputId: String(node.inputId ?? ''),
     service: String(node.service ?? ''),
-    volumePercent: Number(node.volume ?? 0),
-    muted: String(node.mute ?? '0').trim() === '1',
   };
 }
 

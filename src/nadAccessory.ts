@@ -84,21 +84,21 @@ export class NadAmplifierAccessory {
 
     this.setupInputs(this.context.inputs);
 
-    if (typeof this.context.initialActiveIdentifier === 'number') {
-      this.activeIdentifier = this.context.initialActiveIdentifier;
-      this.televisionService.updateCharacteristic(this.platform.Characteristic.ActiveIdentifier, this.activeIdentifier);
-    }
-
-    if (typeof this.context.initialVolumePercent === 'number') {
-      this.volumePercent = clamp(Math.round(this.context.initialVolumePercent), 0, 100);
-      this.speakerService.updateCharacteristic(this.platform.Characteristic.Volume, this.volumePercent);
-    }
-    if (typeof this.context.initialMuted === 'boolean') {
-      this.muted = this.context.initialMuted;
-      this.speakerService.updateCharacteristic(this.platform.Characteristic.Mute, this.muted);
-    }
-
     this.platform.mqtt?.onDeviceTelemetry(device.id, this.handleTelemetry.bind(this));
+    this.platform.mqtt?.onSubscribed(device.id, () => {
+      // Confirmed behaviour of this bridge: an empty payload on a command topic is treated as a
+      // request for the current value rather than acted on, and it's echoed back on the matching
+      // telemetry topic - which we're now subscribed to receive. This is the one mechanism used for
+      // every metric's initial state (and its state after a reconnect) - there's no separate
+      // "startup seeding" code path; the response for each just flows through handleTelemetry exactly
+      // like any other change. "source" goes through the same ambiguity check it always does there
+      // (resolveAmbiguousSource), rather than being trusted outright the way the other three are.
+      this.platform.log.debug('%s: querying current power/mute/volume/source state', device.name);
+      this.platform.mqtt?.publish(device.id, 'power', '');
+      this.platform.mqtt?.publish(device.id, 'mute', '');
+      this.platform.mqtt?.publish(device.id, 'volume_percent', '');
+      this.platform.mqtt?.publish(device.id, 'source', '');
+    });
     this.platform.mqtt?.subscribeDevice(device.id);
   }
 

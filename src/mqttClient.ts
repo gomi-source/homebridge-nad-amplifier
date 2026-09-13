@@ -16,6 +16,7 @@ export class NadMqttClient {
   private readonly telemetryBase: string;
   private readonly subscribedDeviceIds = new Set<string>();
   private readonly handlers = new Map<string, TelemetryHandler>();
+  private readonly subscribedCallbacks = new Map<string, () => void>();
 
   constructor(private readonly log: Logging, private readonly config: MqttConfig) {
     this.commandBase = config.topicBaseCommand?.trim() || 'cmd';
@@ -54,6 +55,17 @@ export class NadMqttClient {
     this.handlers.set(deviceId, handler);
   }
 
+  /**
+   * Registers a callback to run every time this device's telemetry subscription is confirmed active
+   * with the broker (at startup, and again after every reconnect). Use this for anything that depends
+   * on already being subscribed - e.g. publishing an empty payload to a command topic to prompt the
+   * bridge to echo back the current value on the matching telemetry topic, which would otherwise race
+   * against the subscription actually taking effect if fired at the same time as subscribeDevice().
+   */
+  onSubscribed(deviceId: string, handler: () => void): void {
+    this.subscribedCallbacks.set(deviceId, handler);
+  }
+
   /** Subscribes to every telemetry topic under this device id (power, volume, source, ...). */
   subscribeDevice(deviceId: string): void {
     this.subscribedDeviceIds.add(deviceId);
@@ -82,6 +94,7 @@ export class NadMqttClient {
         this.log.error('Failed to subscribe to %s: %s', topic, err.message);
       } else {
         this.log.debug('Subscribed to %s', topic);
+        this.subscribedCallbacks.get(deviceId)?.();
       }
     });
   }
