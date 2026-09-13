@@ -101,5 +101,42 @@
         "type": "string"
       }
     }
-  }
+  },
+  "layout": [
+    "name",
+    "discoveryIntervalMinutes",
+    {
+      "key": "devices",
+      "type": "section",
+      "items": [
+        "devices[].id",
+        "devices[].macaddress",
+        "devices[].name",
+        "devices[].streamSourcePosition"
+      ]
+    },
+    {
+      "key": "mqtt",
+      "type": "section",
+      "title": "MQTT Broker",
+      "description": "Required - this plugin is controlled entirely through MQTT, not through the amplifier's own HTTP interface.",
+      "items": [
+        "mqtt.host",
+        "mqtt.port",
+        "mqtt.username",
+        "mqtt.password",
+        "mqtt.topicBaseCommand",
+        "mqtt.topicBaseTelemetry"
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "Development",
+      "expandable": true,
+      "expanded": false,
+      "items": [
+        "instanceId"
+      ]
+    }
+  ]
 }
