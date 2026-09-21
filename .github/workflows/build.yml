@@ -1,18 +1,29 @@
 name: Build and Lint
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   build:
+    name: Build and lint
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        node-version: [20.x, 22.x, 24.x]
+        # Every Node.js release currently supported: Current, Active LTS and
+        # Maintenance LTS. Update this list as releases enter and leave support.
+        node-version: [22.x, 24.x, 26.x]
 
     steps:
-      - uses: actions/checkout@v5
+      - name: Check out the repository
+        uses: actions/checkout@v5
 
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v6
@@ -20,7 +31,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Lint the project
         run: npm run lint
@@ -28,10 +39,10 @@ jobs:
       - name: Build the project
         run: npm run build
 
-      - name: List, audit, fix outdated dependencies and build again
-        run: |
-          npm list --outdated
-          npm audit || true  # ignore failures
-          npm audit fix || true
-          npm list --outdated
-          npm run build
+      # Repositories without a "test" script are skipped rather than failed,
+      # and start running their tests automatically once one is added.
+      - name: Run the tests
+        run: npm run test --if-present
+
+      - name: Audit dependencies
+        run: npm audit --omit=dev || true
